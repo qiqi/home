@@ -1,0 +1,22 @@
+import os
+
+from wangq.scons import python_tool, boost_tool, boost_python_tool, \
+                        wangq_tool, boost_include_path
+
+env = Environment(CPPPATH=os.path.join(os.getcwd(), '../include'))
+python_tool(env)
+boost_tool(env)
+boost_python_tool(env)
+Export('env')
+
+modules = ['mcadj', 'cpadj', 'util', 'traj']
+static_libs, python_libs = [], []
+for module in modules:
+    libs = SConscript(os.path.join(module, 'SConstruct'),
+                      build_dir=os.path.join('build', module))
+    static_libs += libs[0]
+    python_libs += libs[1]
+
+libs = (static_libs, python_libs)
+Return('libs')
+

@@ -1,0 +1,7 @@
+import os
+
+libs = SConscript('src/SConstruct')
+
+# move target to lib directory
+Install('lib/wangq', libs[0])
+Install('lib/python/wangq', libs[1])

@@ -1,0 +1,1738 @@
+\chapter[Gradient-based Interpolation]
+        {Gradient-based Interpolation using the Adjoint Method}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\x}{\mathbf{x}}
+\newcommand{\y}{\mathbf{y}}
+\newcommand{\z}{\mathbf{z}}
+\renewcommand{\a}{\mathbf{a}}
+\renewcommand{\b}{\mathbf{b}}
+\newcommand{\e}{\mathbf{e}}
+\newcommand{\0}{\mathbf{0}}
+
+\section{Introduction}
+
+This chapter further explores efficient use of adjoint solutions in
+uncertainty quantification.  When many random variables are used
+to describe the uncertainty sources, an adjoint solution reveals much more
+information about the quantities of interest than a solution of the primal
+equation, such as the Navier-Stokes equations.  In the previous chapter,
+we have demonstrated that thousands of Navier-Stokes solutions can be replaced
+by a single adjoint solution.  In this chapter, we aim to further improve
+the efficiency of uncertainty propagation methods by employing more than one
+adjoint solution.
+
+When multiple adjoint equations are solved for different samples of the random
+variables describing uncertainty sources, we obtain the sensitivity gradient
+of the objective function at different locations in the parameter space.
+We can use this gradient information, together with the function values at
+these points, to construct an interpolation approximation of the objective
+function.  Since evaluating the interpolant is much cheaper than solving
+the primal problem, we can calculate statistical information and
+probabilities simply using the Monte Carlo method and sampling from
+the interpolant.  If the interpolation scheme is accurate, the statistics and
+probabilities of the interpolant are accurate representations of that of
+the true objective function.
+
+This chapter presents a novel numerical scheme for
+constructing an accurate interpolant using adjoint sensitivity gradients.
+We represent each datapoint using a Taylor
+series and assume the derivatives in the series to be random variables.  The
+interpolation weights of the datapoints are then chosen to minimize the
+expectation of the interpolation error.  Using this formulation, the gradient
+information on each datapoint can be used to significantly reduce the
+interpolation error.  We show that our interpolation converges exponentially
+on smooth functions for a variety of grids, including randomly scattered data
+points.
+
+
+\section{Interpolation in one-dimensional space}
+
+\subsection{Mathematical formulation}
+Our interpolation scheme approximates the value of a function $f$ using an
+interpolant function ${\hat f}$ calculated from $n+m$ datapoints.
+Let ${\hat f}(x_i)$ be the measurements of
+the function values at $n$ given ``value nodes'' $x_i, i = 1, \ldots, n$
+(their corresponding datapoints are denoted as ``value datapoints''), and
+${\hat f}'(y_i)$ the measurements of the function derivatives at $m$
+``gradient nodes'' $y_i, i = 1, \ldots, m$
+(their corresponding datapoints are denoted as ``gradient datapoints'').
+The value nodes $x_i$ and
+gradient nodes $y_i$ are allowed to be (and often are) the same.
+The measurement errors are assumed
+to be mutually independent random variables with zero mean, and their variances
+are given as
+\[ e_{a\,i}^2 = E\left[({\hat f}(x_i) - f(x_i))^2\right],
+   \quad i = 1,\ldots,n ,\]
+\[ e_{b\,i}^2 = E\left[({\hat f}'(y_i) - f'(y_i))^2\right],
+   \quad i = 1,\ldots,m , \]
+which can be set to 0 for exact measurements of the function.
+The value of our interpolant at point $z$ is a linear combination
+of the measurements ${\hat f}(x_i)$ and ${\hat f}'(y_i)$:
+\begin{equation} \label{interp}
+  {\tilde f}(z) = \sum_{i=1}^n a_i {\hat f}(x_i)
+                + \sum_{i=1}^m b_i {\hat f}'(y_i),
+\end{equation}
+where the coefficients $a_i$ satisfy the normalization condition
+\begin{equation} \label{normalize}
+  \sum_{i=1}^n a_i = 1.
+\end{equation}
+Each $f(x_i)$ can be expanded using Taylor's theorem:
+\[ f(x_i) = f(z) + \sum_{k=1}^N f^{(k)}(z) \frac{(x_i - z)^k}{k!}
+          + f^{(N+1)}(\xi_i) \frac{(x_i - z)^{N+1}}{(N+1)!}, \]
+where each $\xi_i$ is between $x_i$ and $z$.
+We also expand each $f'(y_i)$:
+\[ f'(y_i) = \sum_{k=1}^N f^{(k)}(z) \frac{(y_i - z)^{k-1}}{(k-1)!}
+           + f^{(N+1)}(\eta_i) \frac{(y_i - z)^N}{N!}, \]
+where each $\eta_i$ is between $y_i$ and $z$.  The total order of the expansion
+is set to \[N = n+m\] in this report.  Substituting
+these expansions into (\ref{interp}), the residual of the interpolation is
+\begin{equation} \begin{split} \label{resid}
+  r(z) = {\tilde f}(z) - f(z) &= \sum_{k=1}^N f^{(k)}(z)
+         \left(\sum_{i=1}^n a_i \frac{(x_i - z)^k}{k!} +
+               \sum_{i=1}^m b_i \frac{(y_i - z)^{k-1}}{(k-1)!}\right) \\
+      &+ \sum_{i=1}^n f^{(N+1)}(\xi_i)
+                      \left(a_i \frac{(x_i - z)^{N+1}}{(N+1)!}\right)
+       + \sum_{i=1}^m f^{(N+1)}(\eta_i)
+                      \left(b_i \frac{(y_i - z)^N}{N!}\right) \\
+      &+ \sum_{i=1}^n \left({\hat f}(x_i) - f(x_i)\right) a_i
+       + \sum_{i=1}^m \left({\hat f}'(y_i) - f'(y_i)\right) b_i \quad.
+\end{split} \end{equation}
+
+Let the ``magnitude'' $\beta > 0$ and the ``roughness'' $\gamma > 0$ be two
+parameters that describes the behavior of the function $f$.  Determination
+of their values from the datapoints is discussed in Sections
+\ref{s:beta} and \ref{s:gamma}.
+For now, we consider these two parameters as given.  We assume each
+$f^{(k)}(z), k=1,\ldots,N$ to be a random variable with zero mean and
+standard deviation $\beta \gamma^k$.  Assume that
+$f^{(N+1)}(\xi_i), i=1,\ldots,n$ and $f^{(N+1)}(\eta_i), i=1,\ldots,m$ are
+also random variables with standard deviation $\beta \gamma^{N+1}$.  These
+random variables are assumed to be mutually independent, and independent
+of the measurement errors.  Under these assumptions, the expectation of the
+squared interpolation residual (\ref{resid}) is:
+\begin{equation} \begin{split} \label{quadform}
+  E\left[r(z)^2\right] &= \beta^2 \sum_{k=1}^N \gamma^{2k}
+         \left(\sum_{i=1}^n a_i \frac{(x_i - z)^k}{k!} +
+               \sum_{i=1}^m b_i \frac{(y_i - z)^{k-1}}{(k-1)!}\right)^2 \\
+      &+ \beta^2 \sum_{i=1}^n \gamma^{2N+2}
+                      \left(a_i \frac{(x_i - z)^{N+1}}{(N-1)!}\right)^2
+       + \beta^2 \sum_{i=1}^m \gamma^{2N+2}
+                      \left(b_i \frac{(y_i - z)^N}{N!}\right)^2 \\
+      &+ \sum_{i=1}^n e_{a\,i}^2 a_i^2 + \sum_{i=1}^m e_{b\,i}^2 b_i^2 \quad,
+\end{split} \end{equation}
+which is a quadratic form of the coefficients vector
+\[[a\,b] = [a_1\ldots a_n\,b_1 \ldots b_m].\]
+In fact, let $X^a$ be an $N \times n$ matrix with each matrix element
+\[ X^a_{ki} = \gamma^k \frac{(x_i - z)^k}{k!}, \]
+$X^b$ be an $N \times m$ matrix with
+\[ X^b_{ki} = \gamma^k \frac{(y_i - z)^{k-1}}{(k-1)!}, \]
+$G$ be an $n+m \times n+m$ diagonal matrix with
+\[ G_{ii} = \left\{ \begin{aligned}
+      & \gamma^{N+1} \frac{(x_i - z)^{N+1}}{(N+1)!}, && i=1,\ldots,n \\
+      & \gamma^{N+1} \frac{(y_{i-n} - z)^N}{N!}, && i=n+1,\ldots,n+m
+      \end{aligned} \right. , \]
+and $H$ also be an $n+m \times n+m$ diagonal matrix with
+\[ H_{ii} = \left\{ \begin{aligned}
+      & e_{a\,i}, && i=1,\ldots,n \\
+      & e_{b\,i-n}, && i=n+1,\ldots,n+m \end{aligned} \right. , \]
+the matrix form of the expectation of $r(z)^2$ can be written as
+\begin{equation} \label{mse}
+  E\left[r(z)^2\right] = [a\,b] \left( \beta^2
+   \left[\begin{array}{c}X^{a\,\mathrm T}\\X^{b\,\mathrm T}\end{array}\right]
+   \left[\: X^a\,X^b \:\right] + \beta^2 G^2 + H^2 \right) [a\,b]^{\mathrm T},
+\end{equation}
+which is the quantity we want to minimize by choosing an optimal set of $a$ and
+$b$, under the normalization constraint (\ref{normalize}).  Denote the
+symmetric semi-positive-definite matrix
+\[ A = \beta^2
+   \left[\begin{array}{c}X^{a\,\mathrm T}\\X^{b\,\mathrm T}\end{array}\right]
+   \left[\: X^a\,X^b \:\right] + \beta^2 G^2 + H^2 ,\]
+and the length $n+m$ vector $c$ as
+\[ c_i = \begin{cases} 1 & i=1,\ldots,n\\ 0 & i=n+1,\ldots,n+m  \;.\end{cases}\]
+The minimization of the expectation of the squared interpolation residual
+(\ref{quadform}) under the normalization constraint (\ref{normalize})
+becomes a quadratic programming problem
+\begin{equation} \label{quadprog}
+\min\; [a\,b]\: A\: [a\,b]^{\mathrm T}, \quad c\: [a\,b]^{\mathrm T} = 1.
+\end{equation}
+Numerical methods for solving this quadratic programming for $a$ and $b$ is
+discussed in Section \ref{s:numerical_coefficient}.
+Once $a$ and $b$ are calculated, the
+interpolant can be computed with (\ref{interp}), and the expected error of the
+interpolation can be computed using (\ref{mse}).
+
+
+
+\subsection{Continuity, smoothness and boundedness}
+In this section, we analyze the case when there is no uncertainty in the
+measurements, i.e.,
+\[ {\hat f}(x_i) = f(x_i), \qquad {\hat f}'(y_i) = f'(y_i). \]
+Here, we first show that our interpolant ${\tilde f}$ is a bounded,
+continuous and infinitely differentiable rational function that goes through
+each datapoint:
+\[ {\tilde f}(x_i) = f(x_i), \quad i = 1,\ldots,n . \]
+
+To show that $\tilde f$ is a rational function of $z$, we first analyze
+what values of $z$ makes the quadratic programming problem (\ref{quadprog})
+positive-definite, and what values of $z$ makes it singular.  We then derive a
+rational form of $\tilde f$ when the matrix $A$ in (\ref{quadprog}) is
+positive-definite.  Finally, we show that $\tilde f$ satisfies the same
+rational form when $A$ is singular.
+\begin{lemma} \label{lem_pd}
+Let each $x_i \ne x_j$ for any $1\le i < j\le n$, and each $y_i \ne y_j$ for
+any $1\le i < j\le m$.  Let
+$X^a$, $X^b$ and $G$ be the matrices described in the previous section, then
+\[ A = \beta^2 \left(
+   \left[\begin{array}{c}X^{a\,\mathrm T}\\X^{b\,\mathrm T}\end{array}\right]
+   \left[\: X^a\,X^b \:\right] + G^2 \right) \]
+is positive-definite when $z\ne x_i$ for any $i=1,\ldots,n$; or rank $n+m-1$
+and positive-semi-definite when $z = x_i$ for some $i$.
+\end{lemma}
+\begin{proof}
+To prove that $A$ is positive-definite when $z\ne x_i$, we need to prove that
+$[a\,b]\: A\: [a\,b]^{\mathrm T} > 0$ whenever $a \ne 0$ or $b \ne 0$.
+We first consider the case when $a \ne 0$.  Since $z\ne x_i$ for any $i$, the
+matrix first $n$ diagonal elements of $G$ are nonzero by definition.
+Therefore, $G [a\,b]^{\mathrm{T}} \ne 0$ when $a\ne 0$, and
+\[ [a\,b]\: A\: [a\,b]^{\mathrm T} \ge
+   \beta^2 \left(G\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+   \left(G\: [a\,b]^{\mathrm T}\right) > 0 . \]
+The other situation is $a = 0$ but $b\ne 0$.  We further divide this into
+two sub-situations: when $z \ne y_i$ for any $i$, and when $z = y_i$ for some
+$i$.  When $z\ne y_i$, all diagonal terms in $G$ are nonzero, and
+$b\ne 0 \Longrightarrow G\:[a\,b]^{\mathrm T} \ne 0 \Longrightarrow
+[a\,b]\: A\: [a\,b]^{\mathrm T} > 0$.  In the other case, $z = y_i$ for some
+$i$, the diagonal term in $G$ corresponding to $y_i$ is zero, and all other
+diagonal terms in $G$ are nonzero.  If $b_j \ne 0$ for some $j\ne i$, then
+$G\:[a\,b]^{\mathrm T} \ne 0$, and $[a\,b]\: A\: [a\,b]^{\mathrm T} > 0$
+follows.  Otherwise, $b_i$ is the only nonzero element in $b$, and
+$G\:[a\,b]^{\mathrm T} = 0$.  But since the first row of $X^b$ is all 1,
+the first element of $X^b\,b^{\mathrm T}$ is equal to $b_i$ in this case.
+Therefore, $X^b\,b^{\mathrm T}\ne 0$, and
+\[ [a\,b]\: A\: [a\,b]^{\mathrm T} \ge
+   \beta^2 \left([X^a\,X^b]\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+   \left([X^a\,X^b]\: [a\,b]^{\mathrm T}\right) =
+   \beta^2 \left(X^b\: b^{\mathrm T}\right)^{\mathrm T}
+   \left(X^b\: b^{\mathrm T}\right) > 0 . \]
+We have proven that $A$ is positive-definite when $z\ne x_i$ for any $i$.
+
+Now we prove the statement when $z=x_i$ for some $i$.  In general,
+\[ [a\,b]\: A\: [a\,b]^{\mathrm T} =
+   \beta^2 \left([X^a\,X^b]\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+   \left([X^a\,X^b]\: [a\,b]^{\mathrm T}\right) +
+   \beta^2 \left(G\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+   \left(G\: [a\,b]^{\mathrm T}\right) \ge 0 , \]
+so $A$ is always positive-semi-definite.  To prove that it is rank $n+m-1$
+when $z = x_i$, we only need to show that its nullspace is 1-D.
+Specifically, we show that the basis of its nullspace is $[a^{bi}\,b^{bi}]$,
+where
+\[ a^{bi}_j = \begin{cases} 1, & j = i\\ 0, & j\ne i \end{cases}
+   \qquad \mbox{and} \qquad b^{bi} = 0 . \]
+In fact, since $z=x_i$, the $i$th diagonal elements of $G$ is 0, and its other
+diagonal element $G_{jj} \ne 0$ when $j\ne i, j=1,\ldots,n$.  Therefore,
+\[ G\: [a^{bi}\,b^{bi}]^{\mathrm T} = 0. \]
+Also, the entire $i$th column of the matrix $X^a$ is 0 when $z=x_i$, so 
+\[ [X^a\,X^b]\: [a^{bi}\,b^{bi}]^{\mathrm T} = 0 \]
+as well, and it follows that
+\[ [a^{bi}\,b^{bi}]\: A\: [a^{bi}\,b^{bi}]^{\mathrm T} = 0 . \]
+This proves that $[a^{bi}\,b^{bi}]$ is in the null space of $A$.  On the
+other hand, if $[a\,b]$ is not spanned by $[a^{bi}\,b^{bi}]$, then either
+$a_j\ne 0$ for some $j\ne i$ or $b\ne 0$.  In the first case, since the $j$th
+diagonal element of $G$ is nonzero, $G\:[a\,b]\ne 0$.  Therefore,
+\[ [a\,b]\: A\: [a\,b]^{\mathrm T} \ge 
+   \beta^2 \left(G\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+   \left(G\: [a\,b]^{\mathrm T}\right) > 0 . \]
+In the other case, $b\ne 0$.
+We consider the two cases: $z\ne y_i$ for all $i$, and $z=y_i$ for some $i$.
+By the same arguments, we have $[a\,b]\: A\: [a\,b]^{\mathrm T} > 0$ for both
+cases.
+In conclusion, $[a\,b]\: A\: [a\,b]^{\mathrm T} > 0$ if and only if $[a\,b]$ is
+not spanned by $[a^{bi}\,b^{bi}]$.  Therefore, the $n+m \times n+m$ matrix $A$
+is rank $n+m-1$ and positive-semi-definite when $z=x_i$ for some $i$.
+\end{proof}
+
+In this section, we assume the measurement error to be zero, and the matrix
+$H=0$.  Therefore, this lemma implies that the matrix $A$ is
+positive-definite whenever the interpolation point $z$ does not overlap with
+any value node.  In this case, the Lagrangian of the quadratic
+programming is
+\[ \min\; [a\,b]\: A\: [a\,b]^{\mathrm T} - 2 \lambda\: c\: [a\,b]^{\mathrm T}.
+\]
+By taking the gradient of the Lagrangian, the solution of the quadratic
+programming is
+\[ A\: [a\,b]^{\mathrm T} = \lambda\, c^{\mathrm T},
+  \quad c\: [a\,b]^{\mathrm T} = 1, \]
+which can be obtained by solving the linear system
+\begin{equation} \begin{split} \label{calcab}
+A\: [a^* b^*]^{\mathrm T} = c^{\mathrm T}, \\
+[a\,b] = \frac{[a^* b^*]}{c\: [a^* b^*]^{\mathrm T}} \;.
+\end{split} \end{equation}
+Let $A^* = |A| A^{-1}$ be the adjugate matrix of $A$, each element of the
+adjugate matrix $A^*_{ij}$ is a cofactor of $A$.
+From (\ref{calcab}), we have
+$[a^* b^*]^{\mathrm T} = A^{-1} c^{\mathrm T}$, where $A^{-1} = A^* / |A|$.
+Therefore,
+\[ a^*_i = \sum_{j=1}^n \frac{A^*_{i\,j}}{|A|}, \quad
+   b^*_i = \sum_{j=1}^n \frac{A^*_{i+n\,j}}{|A|} . \]
+Since $c\: [a^* b^*]^{\mathrm T} = \sum_{j=1}^n a^*_j$,
+\[ a_i = a^*_i \left/ \sum_{j=1}^n a^*_j\right. = 
+   \sum_{j=1}^n A^*_{i\,j}\left/\sum_{k=1}^n\sum_{j=1}^n A^*_{k\,j}
+   \right., \quad
+   b_i = b^*_i\left/\sum_{j=1}^n a^*_j\right. =
+   \sum_{j=1}^n A^*_{i+n\,j}\left/\sum_{k=1}^n\sum_{j=1}^n A^*_{k\,j}
+   \right. . \]
+With the interpolation coefficients in this form, the interpolant
+(\ref{interp}) is
+\begin{equation} \label{rational}
+  {\tilde f}(z) = \left(\sum_{i=1}^n f(x_i) \sum_{j=1}^n A^*_{i\,j} +
+                        \sum_{i=1}^m f'(y_i) \sum_{j=1}^n A^*_{i+n\,j}\right)
+  \left/ \left(\sum_{i=1}^n\sum_{j=1}^n A^*_{i\,j}\right)\right. .
+\end{equation}
+Since each element of the matrix $A$ is a polynomial of the interpolation point
+$z$ of degree $N+1$ or less, each of its cofactor $A^*_{ij}$ is a polynomial of
+$z$ of degree $(N+1)(n+m-1)$ or less.  From (\ref{rational}), we conclude that
+when $A$ is positive-definite, $\tilde f$ is a rational function of $z$ whose
+denominator and numerator are both polynomials of order $(N+1)(n+m-1)$ or less.
+This rational form of our interpolant is obtained by assuming that $z$ does not
+equal to any given value node $x_i$.
+
+Lemma \ref{lem_pd} indicates that the only case in which the matrix $A$ in
+the quadratic programming problem (\ref{quadprog}) is not positive-definite
+is when $z=x_i$ for some $1\le i\le n$.  In this case, the $i$th column of
+$X^a$ as well as the $i$th diagonal element of $G$ is zero, and the matrix $A$
+is only positive-semi-definite with a 1-D nullspace.  Therefore,
+the minimum of the quadratic form (\ref{quadprog}) is 0 when $a_i = 1, a_j = 0,
+j\ne i$ and $b_j = 0, j=1,\ldots,m$, which is the unique solution of the
+quadratic programming problem.  Our interpolant function with this $a$ and $b$
+is
+\[ {\tilde f}(x_i) = f(x_i) \;.\]
+On the other hand, due to the zero elements
+in the $i$th column in $X$ and $G$, both the $i$th column and the $i$th row
+of the matrix $A$ is zero, which makes $A^*_{ii}$ the only nonzero cofactor
+of $A$.  Incorporate this into (\ref{rational}), we get
+\[ {\tilde f}(z) = \frac{f(x_i) A^*_{ii}}{A^*_{ii}} = f(x_i) . \]
+This means that equation (\ref{rational}) is a universal formula for our
+interpolant function irrespective to whether $z$ is on one of the value
+nodes or not.  This proves the following lemma:
+\begin{proposition} \label{prop_rational}
+The interpolant $\tilde f$ given by (\ref{interp}) and
+(\ref{quadprog}) can be represented in the form of (\ref{rational}), which
+is a rational function of order $(N+1)(n+m-1)$ or less both in its numerator
+and denominator.
+\end{proposition}
+
+In order to show that this rational function is continuous and smooth,
+we only need to prove that its denominator 
+$\left(\sum_{i=1}^n\sum_{j=1}^n A^*_{i\,j}\right)$ never takes the value of
+0.  In fact, when $z=x_i$, all cofactors other than $A^*_{ii}$ are zero, and
+the denominator simply equals to $A^*_{ii}$, which is nonzero because $A$
+is only one rank deficient (Lemma \ref{lem_pd}).  On the other hand, when $z$
+does not equal to any $x_i$, $A$ is positive-definite.
+Therefore, $A^*$ is also positive-definite, and the denominator
+\[ \sum_{i=1}^n\sum_{j=1}^n A^*_{i\,j} = c\: A^*\: c^{\mathrm T} > 0 \]
+where
+\[ c_i = \begin{cases} 1 & i=1,\ldots,n\\ 0 & i=n+1,\ldots,n+m \;. \end{cases}\]
+Therefore, the rational form (\ref{rational}) of our interpolant $\tilde f$
+has no poles on the real axis $(-\infty, \infty)$, and the lemma below
+follows.
+\begin{proposition} \label{prop_smooth}
+The interpolant $\tilde f$ given by (\ref{interp}) and
+(\ref{quadprog}) is continuous and infinitely differentiable.
+\end{proposition}
+
+In addition to being a smooth analytic function, our interpolant
+is bounded.  In fact,
+${\tilde f}(z)$ converges to a finite limit as $z$ approaches infinity.
+\begin{proposition} \label{prop_limit}
+As the interpolation point $z$ approaches infinity on either side,
+\[ \lim_{z\to\pm\infty} {\tilde f}(z) = \frac{1}{n}\sum_{i=1}^n f(x_i) \;. \]
+\end{proposition}
+\begin{proof}
+Define diagonal matrix $D$, such that
+\[ D_{ii} = \left\{ \begin{aligned}
+            & \frac{(\gamma z)^{2N+2}}{(N+1)!^2}\;, && 1\le i\le n \\
+            & \frac{(\gamma z)^{2N}}{N!^2}\;, && n< i \le n+m  \;.\end{aligned}
+            \right.\]
+From the definition of matrix $A$, one can verify that
+\[ \lim_{z\to\pm\infty} \left( D^{-1} A \right)_{ij} = \left\{
+   \begin{aligned} & 1 && i = j \\ & 0 && i\ne j \;. \end{aligned} \right.\]
+On the other hand, we can write (\ref{calcab}) as
+\[ \left(D^{-1} A \right) [a^*b^*]^{\mathrm T}
+ = D^{-1} c^{\mathrm T} . \]
+Multiplying both sides by $(\gamma z)^{2N+2} / (N+1)!^2$ yields
+\[ \left(D^{-1} A\right) [a^{**}b^{**}]^{\mathrm T}
+ = c^{\mathrm T} ,\]
+where
+\[ [a^{**},b^{**}] = \frac{(\gamma z)^{2N+2}}{(N+1)!^2}\; [a^*b^*] .\]
+As $z\to\infty$, $D^{-1} A$ converges to the identity matrix.  The solution of
+ the linear system $a^{**} \to 1$, $b^{**} \to 0$, and
+\[ \lim_{z\to\infty} a_i
+ = \lim_{z\to\infty} \frac{a_i^*}{\displaystyle\sum_{i=1}^n a^*_i}
+ = \lim_{z\to\infty} \frac{a_i^{**}}{\displaystyle\sum_{i=1}^n a^{**}_i}
+ = \frac1n , \]
+\[ \lim_{z\to\infty} b_i
+ = \lim_{z\to\infty} \frac{b_i^*}{\displaystyle\sum_{i=1}^n a^*_i}
+ = \lim_{z\to\infty} \frac{b_i^{**}}{\displaystyle\sum_{i=1}^n a^{**}_i}
+ = 0 . \]
+Therefore,
+\[ \lim_{z\to\pm\infty} {\tilde f}(z)
+ = \lim_{z\to\pm\infty} \left(\sum a_i f(x_i) + \sum b_i f'(y_i)\right)
+ = \frac{1}{n}\sum_{i=1}^n f(x_i) \;.\]
+\end{proof}
+This lemma shows that the interpolant function converges to the average
+of the function value at all the datapoints as $z$ goes to infinity.
+Since $\tilde f$ is a rational function with no pole on the open real axis,
+this lemma shows that it also has no pole at $\infty$.  Another
+significant implication of this lemma is that our interpolant is
+bounded in $(-\infty, \infty)$.
+
+In addition to continuity, smoothness and boundedness, we analyze how the
+interpolant function matches the given datapoints.
+\begin{proposition} \label{prop_match}
+$\tilde f$ goes through each the value datapoints
+\[ {\tilde f}(x_i) = f(x_i), \quad i = 1,\ldots,n . \]
+Moreover, if $x_i$ is also one of the gradient nodes, i.e.,
+$x_i = y_{i'}$, then $\tilde f$ matches the gradient at this point, i.e.,
+\[ {\tilde f}'(x_i) = f'(x_i). \]
+\end{proposition}
+\begin{proof}
+We have already shown in proving Lemma \ref{prop_rational} that when $z=x_i$,
+the minimum of the quadratic programming (\ref{quadprog}) is achieved when
+$a_i = 1, a_j = 0, j\ne i$ and $b_j = 0, j=1,\ldots,m$, and by definition
+(\ref{interp}), the interpolant goes through the datapoint $(x_i, f(x_i))$,
+i.e., ${\tilde f}(x_i) = f(x_i)$.  Here we show that if a value node
+$x_i$ is also a gradient node, i.e., $x_i=y_{i'}$ for some $1\le i'\le m$,
+our interpolant not only goes through this value datapoint, but also matches
+the gradient $f'(y_{i'})$.
+
+Consider an interpolation point $z$ in the vicinity of $x_i$, then
+\[ \epsilon = x_i - z \]
+is small.  The $i$th column of
+$X^a$ is $\gamma^k \epsilon^k / k!$.  In big O notation, we can write
+\[ X^a_{ki} = \begin{cases} \gamma\epsilon & k=1 \\ O(\epsilon^2) & k>1 \;.
+               \end{cases}\]
+Similarly, the $i'$th column of $X^b$ is $\gamma^k \epsilon^{k-1} / (k-1)!$.
+In big O notation,
+\[ X^b_{ki'} = \begin{cases} \gamma & k=1 \\ O(\epsilon) & k>1 \end{cases} \]
+Note that these two rows of $X^a$ and $X^b$ are almost linearly dependent when
+$\epsilon$ is small.  In fact, denote $a^{\epsilon,i}$ and $b^{\epsilon,i}$ as
+\[ a^{\epsilon,i}_j = \begin{cases} 1 & j = i, \\ 0 & j\ne i, \end{cases} \qquad
+   b^{\epsilon,i}_j = \begin{cases}
+     -\epsilon & j = i', \\ 0 & j\ne i, \end{cases}\]
+then
+\[[X^a\,X^b]\:[a^{\epsilon,i}b^{\epsilon,i}]^{\mathrm{T}} = O(\epsilon^2). \]
+On the other hand,
+\[ G_{ii} = \gamma^{N+1} \frac{\epsilon^{N+1}}{(N+1)!} = O(\epsilon^2), \quad
+   G_{n+i'\,n+i'} = \gamma^{N+1} \frac{\epsilon^N}{N!} = O(\epsilon) ,\]
+so
+\[ G\:[a^{\epsilon,i}b^{\epsilon,i}]^{\mathrm{T}} = O(\epsilon^2) . \]
+Therefore, the quadratic form in (\ref{quadprog}) is
+\[\begin{split}
+   [a^{\epsilon,i} b^{\epsilon,i}]\: A\:
+      [a^{\epsilon,i} b^{\epsilon,i}]^{\mathrm T} =&
+   \beta^2 \left([X^a\,X^b]\:
+      [a^{\epsilon,i}b^{\epsilon,i}]^{\mathrm T}\right)^{\mathrm T}
+   \left([X^a\,X^b]\: [a^{\epsilon,i}b^{\epsilon,i}]^{\mathrm T}\right) \\
+   &+ \beta^2 \left(G\:
+      [a^{\epsilon,i}b^{\epsilon,i}]^{\mathrm T}\right)^{\mathrm T}
+   \left(G\: [a^{\epsilon,i}b^{\epsilon,i}]^{\mathrm T}\right) \\
+   =& O(\epsilon^4) . \end{split} \]
+Based on this fact, we now prove that $[a^{\epsilon,i} b^{\epsilon,i}]$ is
+``almost'' the solution of the quadratic programming (\ref{quadprog}) when
+$\epsilon$ is small.  To be rigorous, denote $[a^*\,b^*]$ as the solution of
+(\ref{quadprog}), then we will prove that
+\[ [a^*\,b^*] = [a^{\epsilon,i} b^{\epsilon,i}] + O(\epsilon^2) . \]
+Once we have this, we can prove this lemma by
+\[ \begin{split}
+ {\tilde f}'(z)
+ &= \lim_{\epsilon\to0} \frac{f(x_i) - {\tilde f}(z)}{\epsilon} \\
+ &= \lim_{\epsilon\to0} \frac{f(x_i) - \left(\sum_{j=1}^n a^*_j f(x_j)
+                           + \sum_{j=1}^m b^*_j f'(y_j)\right)}{\epsilon} \\
+ &= \lim_{\epsilon\to0} \frac{f(x_i) - \left(f(x_i) - \epsilon f'(y_{i'})
+                           + O(\epsilon^2)\right)}{\epsilon} \\
+ &= f'(y_{i'}) \;.
+\end{split} \]
+
+To prove that the difference between $[a^*\,b^*]$ and
+$[a^{\epsilon,i} b^{\epsilon,i}]$ is $O(\epsilon^2)$, we use the fact that
+$[a^*\,b^*]$ minimizes
+$[a\,b]\,A\,[a\,b]^{\mathrm{T}}$ under the constraint $c [a\,b]^{\mathrm{T}}$,
+which is satisfied by $[a^{\epsilon,i} b^{\epsilon,i}]$.  Therefore,
+\[ [a\,b]\,A\,[a\,b]^{\mathrm{T}} \le 
+   [a^{\epsilon,i} b^{\epsilon,i}]\: A\:
+      [a^{\epsilon,i} b^{\epsilon,i}]^{\mathrm T} = O(\epsilon^4) \;.\]
+On the other hand,
+\[ [a\,b]\,A\,[a\,b]^{\mathrm{T}} \ge 
+   \beta^2 \left(G\:[a^*b^*]^{\mathrm T}\right)^{\mathrm T}
+   \left(G\: [a^*b^*]^{\mathrm T}\right), \]
+which implies that \[ G\: [a^*b^*]^{\mathrm T} = O(\epsilon^2). \]
+As $\epsilon\to0$, all diagonal elements of $G$ are finite except for the
+$i$th and $n+i'$th.  This leads to
+\[ a^*_j = O(\epsilon^2), \quad j\ne i \quad \mbox{ and } \quad
+   b^*_j = O(\epsilon^2), \quad j\ne i'. \]
+In addition, since $\sum_{j=1}^n a^*_j = 1$, we have
+\[ a^*_i = 1 + O(\epsilon^2). \]
+With this result, we have
+\[ a^* = a^{\epsilon,i} + O(\epsilon^2) .\]
+We now consider the first element of
+$ [X^a\,X^b][a^*\,b^*]^{\mathrm{T}} $
+\[ \left[[X^a\,X^b][a^*\,b^*]^{\mathrm{T}}\right]_1
+ = \sum_{j=1}^n X^a_{1j} a^*_j + \sum_{j=1}^m X^b_{1j} b^*_j
+ = \gamma \epsilon a^*_i + \gamma b^*_{i'} + O(\epsilon^2) \;.\]
+On the other hand,
+\[ O(\epsilon^4) \ge [a\,b]\,A\,[a\,b]^{\mathrm{T}} \ge
+   \beta^2 \left([X^a\,X^b]\: [a^* b^*]^{\mathrm T}\right)^{\mathrm T}
+   \left([X^a\,X^b]\: [a^* b^*]^{\mathrm T}\right), \]
+and
+\[ O(\epsilon^2) = \left[[X^a\,X^b][a^*\,b^*]^{\mathrm{T}}\right]_1 . \]
+So
+\[ \gamma \epsilon a^*_i + \gamma b^*_{i'} = O(\epsilon^2), \]
+and
+\[ b^*_{i'} = O(\epsilon^2) - \epsilon (1 + O(\epsilon^2))
+            = -\epsilon + O(\epsilon^2) . \]
+With this result, we also have
+\[ b^* = b^{\epsilon,i} + O(\epsilon^2) ,\]
+which concludes the proof.
+\end{proof}
+
+By summarizing the results of Propositions \ref{prop_rational},
+\ref{prop_smooth}, \ref{prop_limit} and \ref{prop_match}, we conclude this
+section with the following result.
+\begin{corollary}
+The interpolant function ${\tilde f}(z)$ given by (\ref{interp}) and
+(\ref{quadprog}) is a rational function with no poles in $[-\infty, \infty]$,
+therefore is bounded, continuous and infinitely differentiable.
+$\tilde f$ goes through each value datapoint, and matches the gradient
+at a value datapoint if it is also a gradient datapoint.
+\end{corollary}
+
+
+
+\subsection{Approximation Error}
+This section discusses the approximation error, also known as the residual of
+the interpolation,
+\[ r(z) = {\tilde f}(z) - f(z) . \]
+We assume that the measurement errors are 0, in which case $\tilde f$ is a
+true interpolant that goes through each datapoint.  The approximation error
+(\ref{resid}) can be rewritten as
+\[ r(z) = \sum_{k=1}^N w_k f^{(k)}(z)
+      + \sum_{i=1}^n w_{N+1}^{\xi_i} f^{(N+1)}(\xi_i)
+      + \sum_{i=1}^m w_{N+1}^{\eta_i} f^{(N+1)}(\eta_i) ,
+\]
+where
+\[\begin{aligned}
+  & w_k = \sum_{i=1}^n a_i \frac{(x_i - z)^k}{k!} +
+         \sum_{i=1}^m b_i \frac{(y_i - z)^{k-1}}{(k-1)!} \;,
+  && \quad k = 1,\ldots, N \\
+  & w_{N+1}^{\xi_i} = a_i \frac{(x_i - z)^{N+1}}{(N+1)!} \;,
+  && \quad i = 1,\ldots,n \\
+  & w_{N+1}^{\eta_i} = b_i \frac{(y_i - z)^N}{N!} \;,
+  && \quad i = 1,\ldots,m \;.
+\end{aligned} \]
+It is clear that the approximation error of $\tilde f$ is a weighted sum of the
+derivatives of $f$ of various orders.  This is a distinct feature and an
+important advantage of our interpolation scheme.  Traditional high-order
+interpolation schemes, such as Lagrange polynomial interpolation, have
+a residual that depends solely on the high-order derivatives of $f$
+\cite[]{polyinterp}.  But even for smooth
+functions, the derivatives can grow exponentially as the order increases.
+This causes the interpolation residual to grow as more datapoints are added,
+unless one uses a specifically designed grid \cite[]{runge}.
+In contrast, our interpolation scheme
+models the exponential growth of the derivatives of $f$, and chooses the
+interpolation coefficients $a$ and $b$ to balance the contribution of various
+derivatives to the residual.  The parameter $\gamma$ models the rate of
+growth or decrease of the derivatives of $f$, and determines
+the contribution of each derivative.
+The coefficients $a$ and $b$, controlling the weights $w_k$
+of the derivatives in the composition of the residual, are chosen
+to explicitly minimize
+the modeled residual (\ref{quadform}).  This strategy makes our interpolation
+scheme immune to divergence on an arbitrary grids, if $\gamma^k$ is a 
+valid model of the growth of derivatives of $f$.
+
+The ``roughness'' parameter plays a key role in determining the weights
+of different derivatives in the composition of the residual.
+From (\ref{quadform}), these weights of the derivatives are bounded by
+\[\begin{aligned}
+ &|w_k| \le \frac{\displaystyle\sqrt{E\left[r(z)^2\right]}}{\beta\gamma^k}\;,
+  && \quad k = 1,\ldots, N \\
+ & |w_{N+1}^{\xi_i}| \le 
+  \frac{\displaystyle\sqrt{E\left[r(z)^2\right]}}{\beta\gamma^{N+1}}\;,
+  && \quad i = 1,\ldots,n \\
+ & |w_{N+1}^{\eta_i}| \le 
+  \frac{\displaystyle\sqrt{E\left[r(z)^2\right]}}{\beta\gamma^{N+1}}\;,
+  && \quad i = 1,\ldots,m
+\end{aligned} \]
+These bounds of the weights grow or decrease at a rate of $\gamma^{-k}$.
+The larger $\gamma$ is, the larger are the weights of low-order derivatives
+compared to the weights of high-order derivatives.  When $\gamma$ is small, 
+the interpolation error originates mostly from high-order derivatives.
+In this case,
+numerical experiments show that the interpolant behaves like Lagrange
+polynomial interpolation:  It is very accurate for functions whose high-order
+derivatives diminish rapidly, but may produce very large errors for functions
+with high-frequency components.  On the other hand, when $\gamma$ is large,
+the interpolant behaves more like Shepards' method \cite[]{shepard}:
+it has poor polynomial
+order of accuracy, but is extremely stable even for non-smooth functions.
+This dependence on $\gamma$ is discussed in more detail in Section
+\ref{s:gamma}.
+In practice, it is beneficial to choose $\gamma$ so that it is neither too
+small nor too large, so that the interpolant is both highly accurate and
+stable.  A method of choosing $\gamma$ in order to achieve this balance is
+also discussed in Section \ref{s:gamma}.
+
+
+
+\subsection{Determination of $\beta$ and its influence on
+            the interpolant} \label{s:beta}
+In the mathematical formulation of the interpolation scheme, we assume two
+given parameters that describes the behavior of the target function $f$:
+they are the ``magnitude'' $\beta$ and the ``roughness'' $\gamma$.
+These parameters determine the standard deviation of the derivatives of $f$
+as random variables, i.e.,
+\begin{equation} \label{model}
+\mathrm{Var} \left[ f^{(k)}(z) \right]^{\frac12}
+ = \beta \gamma^k, \quad k = 0,1,\ldots
+\end{equation}
+In this section, we focus on these two parameters.  We discuss how to estimate
+$\beta$ and $\gamma$ from the given datapoints, and how each of these two
+parameters affect the behavior of the interpolant.
+
+We first consider $\beta$.  It is called the magnitude of the target function
+$f$ because it models its standard deviation
+\[ \mathrm{Var} \left[ f(z) \right]^{\frac12} = \beta . \]
+Based on this fact, we can estimate $\beta$ by taking the sample standard
+deviation of the given datapoints, i.e.,
+\[ \beta \approx \sqrt{\dfrac{\sum_{i=1}^n (f(x_i) - {\bar f}\,)^2}{n-1}} \;,
+   \quad \mbox{ where }{\bar f} = \frac{\sum_{i=1}^n f(x_i)}{n} \;. \]
+In the presence of measurement error, an unbiased estimator for $\beta$ is
+\[ \beta \approx \sqrt{\dfrac{\sum_{i=1}^n ({\hat f}(x_i) - {\bar f}\,)^2}{n-1}
+   - \dfrac{\sum_{i=1}^n e_{a\,i}^2}{n}} \;,
+   \quad \mbox{ where }{\bar f} = \frac{\sum_{i=1}^n {\hat f}(x_i)}{n} \;. \]
+assuming proper independence between the values of $f$ and the measurement
+errors.  However, this formula is not practical because it can give imaginary
+values of $\beta$.  We therefore use
+\begin{equation} \label{calcbeta}
+\beta \approx \sqrt{\dfrac{
+   \sum_{i=1}^n ({\hat f}(x_i) - {\bar f}\,)^2}{n-1} \;
+   \exp\left(-\frac{n-1}{n}\dfrac{\sum_{i=1}^n e_{a\,i}^2}
+               {\sum_{i=1}^n ({\hat f}(x_i) - {\bar f}\,)^2}\right) } \;.
+\end{equation}
+Using this formula, $\beta$ is always a positive real number.
+When the measurement error is relatively small, it agrees with
+the unbiased estimator to first-order accuracy.  Therefore, (\ref{calcbeta})
+offers an engineering compromise between bias and robustness.
+
+$\beta$ augments the relative importance of the given measurements to the
+importance of the measurement
+errors, and determines how hard the interpolant tries to fit the data
+points.  We first observe from the definition of $A$ that $\beta$ has no
+effect on the interpolant when $H=0$, i.e.,
+when there are no measurement errors.
+When measurement errors are present, the ratio of $e_{a\,i}$ to $\beta$
+presents a relation, between
+the contribution to the variation of ${\hat f}(x_i)$ from the measurement
+errors, and
+the contribution to the variation of ${\hat f}(x_i)$ from the variation of
+the function $f$ itself.
+This can be seen from the definition of matrix $A$ in the quadratic programming
+(\ref{quadprog}), as $\beta$ determines the relative importance of the first
+two terms in $A$ relative to the third term $H$, which corresponds to the
+measurement errors in $\hat f$.  When $\beta$ is small compared to the
+measurement errors, $A\approx H^2$, and the interpolant $\tilde f$ is a
+constant function whose value is
+\[ {\tilde f}(z) \equiv \sum_{i=1}^n \frac{1}{e_{a\,i}^2} {\hat f}(x_i) . \]
+In this case, the
+variability of the function values $\hat f(x_i)$ are attributed to the
+measurement errors, and $\tilde f$ makes no effort in trying to go through
+each datapoint.  But when $\beta$ is large compared to
+the measurement errors, the third term in the definition of $A$ can be ignored
+compared to the first two terms.  As discussed in the previous section,
+the interpolant $\tilde f$ goes through each
+datapoint ${\hat f}(x_i)$ when $H$ is ignored.  In this case,
+the variability of the function values $\hat f(x_i)$ is attributed to the
+variation of the function $f$ itself, and the interpolant tries to go through
+each datapoint exactly.  Similarly, the ratio of $e_{b\,i}$ and $\beta$
+\footnote{To be more specific, the ratio of $e_{b\,i}$ to $\beta\gamma$.}
+presents a relation, between
+the contribution to the variation of ${\hat f}'(y_i)$ from the measurement
+errors, and the
+contribution to the variation of ${\hat f}'(y_i)$ from the variation of the
+function gradient $f'$.  A larger
+$\beta$ forces the interpolant to make a more vigorous attempt to match the
+function value and its gradient at the given datapoints.
+
+\begin{figure}[htb!] \centering
+\includegraphics[width=6.0in]{output_interp/basis_uniform.png}
+\caption{The basis functions on a uniform grid for 
+$\gamma=1$ (upper-left), $\gamma=10$ (upper-right),
+$\gamma=25$ (lower-left) and $\gamma=100$ (lower-right).
+The dotted vertical lines indicate the location of the uniformly spaced
+value nodes, and each solid line of corresponding color is the unique
+interpolant that equals 1 at that node and 0 at all other nodes. }
+\label{basis_uniform}
+\end{figure}
+\begin{figure}[htb!] \centering
+\includegraphics[width=6.0in]{output_interp/basis_random.png}
+\caption{The basis functions on a non-uniform grid for different roughness
+$\gamma$: $\gamma=1$ (upper-left), $\gamma=10$ (upper-right),
+$\gamma=25$ (lower-left) and $\gamma=100$ (lower-right).
+The dotted vertical lines indicate the location of the non-uniformly spaced
+value nodes, and each solid line of corresponding color is the unique
+interpolant that equals 1 at that node and 0 at all other nodes. }
+\label{basis_random}
+\end{figure}
+
+\subsection{Determination of $\gamma$ and its influence on
+            the interpolant} \label{s:gamma}
+
+The other parameter, the ``roughness'' $\gamma$, models
+how fast the $k$th derivative of $f$ grows as $k$ increases.
+$\gamma$ is called the ``roughness'' because if $f$ is a sine wave of angular
+frequency $\gamma$, i.e., $f(x) = e^{i\gamma x}$, then $\gamma$ is the rate of
+growth of its derivative, i.e., $f^{(k)}(x) = \gamma^k f(x)$.
+We use this as a model for general smooth functions by assuming that the
+magnitude of the $k$th derivative of $f$ grows exponentially as $\gamma^k$.
+Specifically, the standard deviation of $f^{(k)}(z)$ is modeled as in
+(\ref{model}).  In this model, the parameter $\gamma$  describes the frequency
+of the fastest varying mode of the function $f$, or the reciprocal of the
+smallest length scale of $f$.
+With the appropriate $\gamma$, this model provides a valid estimate
+of the magnitude of $f^{(k)}(z)$ for most smooth functions.  More importantly,
+with $\beta$ obtained from (\ref{calcbeta}), this model
+only has one free parameter $\gamma$ to be determined from the often-limited
+information about $f$.  This feature allows a robust estimate of the model
+parameter $\gamma$ and contributes to the stability of our interpolation scheme.
+
+We determine $\gamma$ from the given datapoints using the bi-section
+method.  Upper and lower bounds are first determined from the spacing of the
+nodes, then the interval of possible $\gamma$ is bi-sected by interpolating
+each value datapoint using other datapoints, and comparing the
+actual residual $f(x_i) - {\tilde f}(x_i)$ with the expected residual
+calculated using (\ref{mse}).  In determining the upper and lower bounds,
+we rely on the fact that the reciprocal of $\gamma$ models the smallest length
+scale of $f$.  On the other hand, the possible length scales that can be
+reconstructed from the finite number of datapoints are limited by the span of
+the datapoints on one end, and by the Nyquist sampling theorem on the other
+end.  Specifically, we start the bi-section with
+\[ \gamma_{\min} = \frac{1}{\delta_{\max}}\;, \quad
+   \gamma_{\max} = \frac{\pi}{\delta_{\min}}\;, \]
+where $\delta_{\max}$ is the maximum distance between any two nodes, including
+value nodes and gradient nodes.  $\delta_{\min}$ is the minimum distance
+between any two nodes.  The interval $[\gamma_{\min}, \gamma_{\max}]$ is
+then bi-sected logarithmically at each step by
+$\gamma_{\mathrm{mid}} = \sqrt{\gamma_{\min} \gamma_{\max}}$.
+With this $\gamma_{\mathrm{mid}}$, for each $i=1,\ldots,n$, we use our
+interpolation scheme to calculate ${\tilde f}(x_i)$ with datapoints
+other than the one at $x_i$.  We then compare the expected interpolation
+error estimated using (\ref{mse}) with the true residual
+$r(x_i) = {\tilde f}(x_i) - f(x_i)$.  We decide that
+$\gamma < \gamma_{\mathrm{mid}}$ if the expected residuals calculated by
+(\ref{mse}) are too large compared to the true residuals,
+or $\gamma > \gamma_{\mathrm{mid}}$ if they are too small.
+This choice is based on the observation that a larger $\gamma$ results in a
+more conservative error estimate.  Specifically, we set
+\[ \begin{aligned}
+& \gamma_{\max} = \gamma_{\mathrm{mid}} && \mbox{ if } && \frac{1}{n}
+  \sum_{i=1}^n \frac{r(x_i)^2}{\displaystyle E\left[r(x_i)^2\right]} < 1 \;,\\
+& \gamma_{\min} = \gamma_{\mathrm{mid}} && \mbox{ if } && \frac{1}{n}
+  \sum_{i=1}^n \frac{r(x_i)^2}{\displaystyle E\left[r(x_i)^2\right]} > 1 \;,
+\end{aligned} \]
+or when the measurement errors are nonzero,
+\begin{equation} \begin{aligned} \label{bisect}
+& \gamma_{\max} = \gamma_{\mathrm{mid}} && \mbox{ if } && \frac{1}{n}
+  \sum_{i=1}^n \frac{\left({\tilde f}(x_i) - {\hat f}(x_i)\right)^2}
+               {\displaystyle E\left[r(x_i)^2\right] + e_{a\,i}^2} < 1 \;,\\
+& \gamma_{\min} = \gamma_{\mathrm{mid}} && \mbox{ if } && \frac{1}{n}
+  \sum_{i=1}^n \frac{\left({\tilde f}(x_i) - {\hat f}(x_i)\right)^2}
+               {\displaystyle E\left[r(x_i)^2\right] + e_{a\,i}^2} > 1 \;.
+\end{aligned} \end{equation}
+The bi-section continues until $\gamma_{\min}$ and $\gamma_{\max}$ are
+sufficiently close.  We stop the bi-section when
+\[ \frac{\gamma_{\max}}{\gamma_{\min}} < T_\gamma \]
+for some threshold $T_\gamma$.  At this point, we use $\gamma_{\mathrm{mid}}$
+as the estimation for the ``roughness'' parameter $\gamma$.
+Through numerical experiments with a number of different functions, we found
+that $T_\gamma \approx 1.1$ is enough to produce very good results.
+
+The parameter $\gamma$ determines how aggressive the interpolant tries to
+achieve polynomial accuracy.  As discussed in Section \ref{s:gamma},
+when $\gamma$
+is small, the approximation error mainly comes from high-order derivatives of
+$f$.  In this case, the interpolation is accurate on smooth functions such as
+lower-order polynomials, but may produce very large errors if the function
+contains small length scales, which cause its high-order derivatives to grow
+rapidly.  As $\gamma$ gets large, the approximation error is dominated by
+low-order derivatives; the interpolation becomes more robust on
+oscillatory functions but less accurate on smooth functions.  To illustrate
+the effects of $\gamma$, Figures \ref{basis_uniform} and \ref{basis_random}
+plot the basis of the interpolant for different values of $\gamma$ on a uniform
+grid and a non-uniform grid.  Both the uniform and non-uniform grid consist
+of 7 nodes.  The basis of the interpolant at each node is defined as the
+unique interpolant on this grid that equals 1 on that node and 0 on all other
+nodes.  An interpolant constructed from any function values given on this grid
+is a linear combination of these basis functions.  Two important changes can
+be observed as $\gamma$ varies.  First, the support
+of the basis functions increases as $\gamma$ decreases.  Although our
+interpolation scheme is formally global, i.e., the function value at each data
+point influence the interpolant globally, the area where the influence is
+essentially nonzero is finite when $\gamma$ is large.  In both the uniform and
+non-uniform cases, the effective support of each basis function when
+$\gamma=100$ barely covers the nearest neighborhood of the corresponding node.
+As $\gamma$ decreases to $25$, the support of each basis function extends to
+neighboring nodes, some times beyond a neighboring node in the non-uniform
+grid.  When $\gamma$ further reduces to 10, the support of each basis covers
+multiple nodes.  When $\gamma = 1$, the basis functions becomes global
+functions without finite support.  The second change when $\gamma$ decreases is
+the increase of the Lebesgue constant.  The Lebesgue constant $\Lambda$ is
+defined as the operator norm of the interpolation scheme as a linear mapping
+from the space of continuous functions to itself, i.e.,
+\[ \Lambda = \sup_{||f|| = 1} \left\|{\tilde f}\right\| , \]
+where $\|\cdot\|$ is the maximum norm.  It can be shown that $\Lambda$ is equal
+to the maximum of all basis functions within the interpolation interval.
+Since the interpolant must go through each datapoint, the Lebesgue constant
+is greater or equal to 1.  As can be seen from Figures \ref{basis_uniform} and
+\ref{basis_random},
+the basis functions are almost capped at 1 when $\gamma=100$, and the
+Lebesgue constant is very close to unity.  As $\gamma$ decreases, the basis
+functions overshoot above 1, and the Lebesgue constant increases.
+When $\gamma=1$, the Lebesgue constant is about $1.3$ in the uniform grid,
+and above $2$ in the non-uniform grid.  We also notice that for the same
+$\gamma$, the Lebesgue constant is higher for the non-uniform grid.
+These two effects, the increase of the Lebesgue number, and the growth of the
+support of each basis function as $\gamma$ decreases, dominate the behavior
+of the interpolant.  A smaller $\gamma$ generates a more global set of basis
+functions, allowing the use of a larger number of datapoints in the calculation
+of the interpolant value, which result in a more accurate approximation for
+smooth functions.  A larger $\gamma$, on the other hand, represents a more
+conservative approach.  By using fewer datapoints to determine the value of
+the interpolant, the interpolation scheme loses high-order accuracy for smooth
+functions; however, by constraining the basis functions to a more local
+support, it has a smaller Lebesgue constant, making it more robust for
+non-smooth functions.
+
+To end this section, we further illustrate the role of $\gamma$ by considering
+two extreme cases.
+\begin{proposition}
+As the ``roughness'' parameter $\gamma \to 0^+$, the interpolant $\tilde f$
+given by (\ref{interp}) and (\ref{quadprog}) converges pointwise to the
+Lagrange polynomial interpolant.
+\end{proposition}
+
+\begin{proposition}
+As the ``roughness'' parameter $\gamma \to +\infty$, the interpolant $\tilde f$
+given by (\ref{interp}) and (\ref{quadprog}) converges pointwise to the
+inverse distance weighting interpolant, a.k.a. Shepards' method,
+with power parameter $p = N+1$.
+\end{proposition}
+
+
+
+\subsection{Numerical solution of the interpolation coefficients}
+\label{s:numerical_coefficient}
+We have derived the formulation of our interpolation scheme, the smoothness
+properties of the interpolant, a preliminary error analysis, and formulas
+to calculate the parameters $\beta$ and $\gamma$ from given datapoints.
+This section focuses on the numerical method for calculating the interpolant.
+Note that although we have proven that our interpolant function $\tilde f$ is
+a rational function (Proposition \ref{prop_rational}), we do not explicitly
+construct this rational function.
+Instead, the interpolation coefficients $a$ and $b$ are numerically calculated
+for each interpolation point $z$ by solving the quadratic programming
+(\ref{quadprog}), and the interpolant is constructed point-by-point.
+We choose this approach because the rational form of $\tilde f$ is of very
+high-order.  Both its numerator and denominator can be of order up to
+$(N+1)(n+m-1)$, where $N$ is normally equal to $n+m$.
+Although it is theoretically possible to construct $\tilde f$ globally, it is
+prohibitively difficult to design a robust numerical algorithm to calculate its
+coefficients.  For this reason, we resort to solving the quadratic programming
+(\ref{quadprog}) for $a$ and $b$ and calculate the value of the interpolant
+${\tilde f}(z)$ at each $z$.
+Here we discuss the numerical issues that arise in solving
+this quadratic programming problem and our solution of these issues.
+
+The main numerical difficulties result from the fact that the matrix $A$
+in the quadratic programming (\ref{quadprog}) is extremely ill-conditioned
+when $N$ is large, rendering Cholesky decomposition, the most straightforward
+way of solving (\ref{calcab}), highly unreliable.  Two factors may contribute
+to the gigantic condition number of $A$.  First, when $\gamma (x_i-z)$ and
+$\gamma (y_i-z)$ are small for multiple datapoints, the high-order terms in
+the corresponding columns of $X^a$ and $X^b$ are very small, making them
+almost linearly dependent, and the matrix $[X^a\,X^b]$ almost singular.
+At the same time, the corresponding diagonal terms in $G$ are even smaller,
+making the regularization effect of $G$ negligible.  Therefore, when
+the corresponding measurement errors in $H$ are also zero,
+$A$ is almost singular.
+The second contribution to the condition number of $A$ results from an
+opposite situation.  When $\gamma (x_i-z)$ or $\gamma (y_i-z)$ is large,
+the high-order terms in the corresponding columns of $X^a$, $X^b$ and
+corresponding diagonal elements in $G$ are very large.  As a result,
+the corresponding elements in $A$ are much larger than the rest of the matrix,
+boosting its condition number.  In practice, we find that these elements in
+$A$ are often so large that they overflow the standard double-precision
+floating point numbers.  These two factors combine to make the condition number
+of $A$ so large that direct solution of the linear system is basically 
+impossible.
+In fact, because $A$ is very close to singular, Cholesky factorization fails
+most of the time, even though $A$ is theoretically positive-definite.
+This requires the use of different strategies to treat these two respective
+factors.
+
+The first strategy is to avoid the explicit construction of $A$.  Define
+\[ X = \beta [X^a\,X^b] \]
+and diagonal matrix $F$ such that
+\[ F_{ii}^2 = \beta^2 G_{ii}^2 + H_{ii}^2 .\]
+By definition of $A$, we have
+\[ A = X^{\mathrm T} X + F^{\mathrm T} F
+ = \left[\begin{array}{c} X \\ F\end{array}\right]^{\mathrm T}
+   \left[\begin{array}{c} X \\ F\end{array}\right] .\]
+By performing a QR decomposition
+\begin{equation} \label{qr_decomp}
+\left[\begin{array}{c} X \\ F\end{array}\right] = Q R ,
+\end{equation}
+we obtain $R$ as the Cholesky factor of $A$:
+\[ A = R^{\mathrm T} Q^{\mathrm T} Q R = R^{\mathrm T} R .\]
+The interpolation coefficients $a$ and $b$ then can be calculated by solving
+an upper triangular system and a lower triangular system.  This procedure
+avoids the failure-prone Cholesky factorization, and improves numerical
+stability.
+
+The second strategy is designed to solve the floating point overflow problem.  
+We observe that due to the additional contribution from $G$ and $H$,
+the diagonal elements of $A$ are most prone to overflow.
+The elements in the solution vector $[a,b]$ corresponding to
+the overflowed diagonal elements of $A$ are very close to zero.
+This is because $\gamma$ is large enough so that
+the support of the corresponding basis function is finite, and $z$ is far
+enough from the corresponding datapoint that it is outside the support of
+its basis function.  In this case, there is no contribution to the interpolant
+at $z$ from that datapoint, and the corresponding interpolation coefficient
+is zero.  Based on
+this observation, our second strategy is to remove the rows and columns of $A$
+in which the diagonal elements overflow, solve the remaining linear system for
+part of $[a\,b]$, and set the rest of $[a,b]$, whose corresponding matrix rows
+and columns are removed to 0.
+
+These two strategies ensure the stability
+of our interpolation scheme for hundreds of datapoints and
+a wide range of $\gamma$.  However, with very large number of datapoints
+and extreme values of $\gamma$, the system may be so ill-conditioned that
+our numerical scheme may still fail to produce an
+accurate result.  If this does happen, an ultimate solution is to reduce the
+total order of the Taylor expansions $N$, so that $N < n+m$.  Although this
+compromises the high-order accuracy of the interpolation scheme, it is often
+better than a solution corrupted by numerical error.
+
+
+
+\subsection{Numerical Examples}
+
+In this section, we apply our interpolation scheme to the following example
+functions:
+\begin{enumerate}
+\item A cosine wave $ f(x) = \cos x $.  This function is smooth and expected
+      to be an easy case for interpolation schemes.
+\item The Runge function $ f(x) = \dfrac{1}{1+x^2} $.  It was used by Runge
+      \cite[]{runge} to demonstrate the divergence of Lagrange interpolation on
+      an equally spaced grid.
+\item A cosine wave with a sharp Gaussian notch
+      $ f(x) = \cos x - 2 e^{-(4x)^2} $.
+      Since this function contains two distinct length scales, we use it
+      as a simple model for multi-scale functions.
+\item A discontinuous function
+      $ f(x) = \begin{cases} e^{-x^2}, & x > 0 , \\
+                            -e^{-x^2}, & x < 0 . \end{cases} $.
+\end{enumerate}
+
+\clearpage
+\begin{figure}[tb] \centering
+\includegraphics[width=2.5in]{output_interp/uniform_cos_1d_008.png}
+\includegraphics[width=2.5in]{output_interp/uniform_cos_1d_016.png}
+\includegraphics[width=2.5in]{output_interp/uniform_cos_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/cos_convergence_uniform.png}
+\caption{Interpolating the cosine wave using 8 (upper-left), 16 (upper-right),
+         24 (lower-left) uniform grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_cos_uniform}
+\end{figure}
+
+\begin{figure}[tb] \centering
+\includegraphics[width=2.5in]{output_interp/uniform_runge_1d_008.png}
+\includegraphics[width=2.5in]{output_interp/uniform_runge_1d_016.png}
+\includegraphics[width=2.5in]{output_interp/uniform_runge_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/runge_convergence_uniform.png}
+\caption{Interpolating the Runge function using 8 (upper-left),
+         16 (upper-right), 24 (lower-left) uniform grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_runge_uniform}
+\end{figure}
+
+\clearpage
+\begin{figure}[tb] \centering
+\includegraphics[width=2.5in]{output_interp/uniform_notch_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/uniform_notch_1d_040.png}
+\includegraphics[width=2.5in]{output_interp/uniform_notch_1d_056.png}
+\includegraphics[width=2.5in]{output_interp/notch_convergence_uniform.png}
+\caption{Interpolating the notched cosine function using 24 (upper-left),
+         40 (upper-right), 56 (lower-left) uniform grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_notch_uniform}
+\end{figure}
+
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/uniform_step_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/uniform_step_1d_040.png}
+\includegraphics[width=2.5in]{output_interp/uniform_step_1d_056.png}
+\includegraphics[width=2.5in]{output_interp/step_convergence_uniform.png}
+\caption{Interpolating the discontinuous function using 24 (upper-left),
+         40 (upper-right), 56 (lower-left) uniform grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_step_uniform}
+\end{figure}
+
+\clearpage
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/random_cos_1d_008.png}
+\includegraphics[width=2.5in]{output_interp/random_cos_1d_016.png}
+\includegraphics[width=2.5in]{output_interp/random_cos_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/cos_convergence_random.png}
+\caption{Interpolating the cosine wave using 8 (upper-left),
+         16 (upper-right), 24 (lower-left) quasi-random grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_cos_random}
+\end{figure}
+
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/random_runge_1d_008.png}
+\includegraphics[width=2.5in]{output_interp/random_runge_1d_016.png}
+\includegraphics[width=2.5in]{output_interp/random_runge_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/runge_convergence_random.png}
+\caption{Interpolating the Runge function using 8 (upper-left),
+         16 (upper-right), 24 (lower-left) quasi-random grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_runge_random}
+\end{figure}
+
+\clearpage
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/random_notch_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/random_notch_1d_040.png}
+\includegraphics[width=2.5in]{output_interp/random_notch_1d_056.png}
+\includegraphics[width=2.5in]{output_interp/notch_convergence_random.png}
+\caption{Interpolating the notched cosine function using 24 (upper-left),
+         40 (upper-right), 56 (lower-left) quasi-random grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_notch_random}
+\end{figure}
+
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/random_step_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/random_step_1d_040.png}
+\includegraphics[width=2.5in]{output_interp/random_step_1d_056.png}
+\includegraphics[width=2.5in]{output_interp/step_convergence_random.png}
+\caption{Interpolating the discontinuous function using 24 (upper-left),
+         40 (upper-right), 56 (lower-left) quasi-random grid points.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_step_random}
+\end{figure}
+
+\clearpage
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/uniform_notch_grad_1d_016.png}
+\includegraphics[width=2.5in]{output_interp/uniform_notch_grad_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/uniform_notch_grad_1d_040.png}
+\includegraphics[width=2.5in]{output_interp/notch_convergence_uniform_grad.png}
+\caption{Interpolating the notched cosine function using 16 (upper-left),
+         24 (upper-right), 40 (lower-left) uniform grid with gradient.
+         In the convergence plot (lower-right),
+         the horizontal axis is the number of grid points;
+         circles are error without gradient, diamonds are error with gradient.}
+\label{interp_notch_grad_uniform}
+\end{figure}
+
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.5in]{output_interp/random_notch_grad_1d_016.png}
+\includegraphics[width=2.5in]{output_interp/random_notch_grad_1d_024.png}
+\includegraphics[width=2.5in]{output_interp/random_notch_grad_1d_040.png}
+\includegraphics[width=2.5in]{output_interp/notch_convergence_random_grad.png}
+\caption{Interpolating the notched cosine function using 16 (upper-left),
+         24 (upper-right), 40 (lower-left) quasi-random grid with gradient.
+         In the convergence plot (lower-right),
+         the horizontal axis is the number of grid points;
+         circles are error without gradient, diamonds are error with gradient.}
+\label{interp_notch_grad_random}
+\end{figure}
+
+\clearpage
+For all these functions, the interpolant is constructed in the interval
+$[-5,5]$ using two kinds of grids: a uniformly distributed grids,
+and a Niederreiter quasi-random sequence \cite[]{niederreiter}.
+Figures \ref{interp_cos_uniform} to
+\ref{interp_step_random} demonstrates the performance of our interpolation
+scheme on these four functions using both uniform and quasi-random grids.
+In these figures, all the datapoints are value datapoints, and no derivative
+information is used.  In each of these figures, the first three plots show
+the target function as dashed lines and the interpolant approximation as solid
+lines.  The dots indicate the location of the value datapoints.  The fourth
+plot in each figure shows the convergence of our interpolations scheme.
+In these convergence plots, the horizontal axis is the number of datapoints
+used, and the vertical axis is the difference between the target function
+and the interpolant function, measured in $L^\infty$ distance (dotted lines)
+and in $L^2$ distance (solid lines).  As can be seen from these figures,
+our interpolation scheme works robustly for all four functions on both uniform
+and quasi-random grids.  For the three smooth functions, it
+converges exponentially to a cutoff precision of approximately $10^{-10}$
+to $10^{-13}$.  The rate of convergence is fastest for the cosine wave, and
+slowest for the multi-scale notched cosine function.  This behavior is expected
+because the notched cosine function contains the most high-frequency
+components, while the plain cosine function contains the least.
+The cutoff precision is due to the round-off error accumulated in the QR
+factorization (\ref{qr_decomp}), and the solution of the linear systems with
+$R$.
+For the discontinuous function, we observe artificial overshoot and undershoot
+near the discontinuity, whose size doesn't seem to decrease as the grid refines.
+As a result, the $L^\infty$ error in the convergence plots remains almost
+constant, and the $L^2$ error decreases slowly.  Despite of this Gibbs-like
+phenomenon, the interpolant seems to converge pointwise to the target
+function, just as Lagrange interpolation does on a Lobatto grid.
+In these numerical experiments, our interpolation demonstrates high accuracy
+for smooth functions, and excellent robustness even for discontinuous
+functions.
+
+While Figures \ref{interp_cos_uniform} to \ref{interp_step_random} demonstrate
+our scheme with $m=0$, Figures \ref{interp_notch_grad_uniform} to
+\ref{interp_notch_grad_random} shows the case with $m=n$ and $x_i=y_i$, i.e.,
+each value datapoint is also a gradient datapoint.  Uniform grids are
+used in Figure \ref{interp_notch_grad_uniform}, and Niederreiter quasi-random
+grids are used in Figure \ref{interp_notch_grad_uniform}.
+In the convergence plots, the horizontal
+axis is the number of value datapoints $n$, and the vertical axis is the
+error of the interpolant approximation.  The circular dots show the $L^2$
+(with solid lines) and $L^\infty$ (with dotted lines) error of the
+interpolant constructed without gradient information, i.e., $m=0$;
+the diamond symbols show the $L^2$ (with solid lines) and $L^\infty$
+(with dotted lines) error of the interpolant constructed with gradient
+information at each value datapoint, i.e., $m=n$ and
+$y_i=x_i, i=1,\ldots,n$.  These two plots show that
+using derivative information on each datapoint greatly increases the accuracy
+of the interpolant approximation for the same number of value datapoints $n$.
+In both uniform grids and quasi-random grids, using derivative information
+essentially doubles the rate of convergence.
+
+\begin{figure}[htb!] \centering
+\includegraphics[width=2.9in]{output_interp/random_error_runge_1d_012.png}
+\includegraphics[width=2.9in]{output_interp/random_error_runge_1d_018.png}
+\includegraphics[width=2.9in]{output_interp/random_error_runge_1d_030.png}
+\includegraphics[width=2.9in]{output_interp/runge_convergence_random_error.png}
+\caption{Interpolating the Runge function using 12 (upper-left),
+         18 (upper-right), 30 (lower-left) quasi-random grid with
+         simulated measurement errors, whose magnitudes are indicated by
+         the bars.
+         In the convergence plot (lower-right), the horizontal axis is the
+         number of grid points.}
+\label{interp_runge_random_error}
+\end{figure}
+Figure \ref{interp_runge_random_error} demonstrates our interpolation scheme
+when measurement errors are nonzero.  Independent Gaussian random number are
+added to the function values to simulate measurement errors in the datapoints.
+In this case, our scheme becomes a
+nonlinear regression scheme by constructing a line that represents a ``best
+fit'' for the data.  The convergence plot shows slow convergence to the target
+function, due to the corruption by the measurement errors.
+
+
+\section{Interpolation in multi-dimensional space}
+
+\subsection{An extension of the multi-variate Taylor's theorem}
+
+Before we introduce our interpolation scheme in multi-dimensional space, we
+prove a generalized version of the multi-variate Taylor's theorem (to
+allow different orders of expansion in different directions).  This
+extension allows us to expand Taylor series to different order in each
+dimension, greatly increasing the flexibility of our interpolation scheme
+in multi-dimensional space.  We begin with two definitions.
+\begin{definition} \label{exp_set}
+Denote $\N = \{0,1,\ldots\}$ as the set of non-negative integers.  We call
+$S \subset \N^d$ an {\bf expansion order set} if and only if $S$ is finite, and
+for any $\kappa = (\kappa_1, \ldots, \kappa_d) \in S$ and $1\le k\le d$ such
+that $\kappa_k > 0$,
+\[ \kappa - \e_k =
+   (\kappa_1, \ldots, \kappa_{k-1}, \kappa_k-1, \kappa_{k+1}, \ldots \kappa_d)
+   \in S . \]
+\end{definition}
+From the definition, we can see that any non-empty expansion order set contains
+the zero element $(0,\ldots,0)$.
+\begin{definition} \label{boundary_set}
+Let $S \subset \N^d$ be an expansion order set, the {\bf boundary} of $S$,
+denoted as $\partial S$, is defined as
+\[ \partial S = \{\kappa \;\mid\; \kappa \notin S \mbox{ and }
+   \kappa - \e_k \in S \mbox{ for some } 1\le k \le d \} \;.\]
+\end{definition}
+With these two definitions, the following theorem is an extension to the
+standard multi-variate Taylor's theorem, and will be used in the mathematical
+formulation of our multi-variate interpolation scheme.
+\begin{theorem} \label{taylor_thm}
+Let $S \subset \N^d$ be a non-empty expansion order set,
+$\a = (a_1,\ldots,a_d)$ and $\b = (b_1,\ldots,b_d)$, then a $d$-dimensional
+smooth function $f$ can be expanded as
+\begin{equation} \label{taylor}
+f(\b) = \sum_{\kappa\in S} \frac{f^{(\kappa)}(\a)}{\kappa!} (\b-\a)^\kappa
+      + \sum_{\kappa\in \partial S} \zeta^\kappa_S \,
+        \frac{f^{(\kappa)}(\x_\kappa)}{\kappa!} (\b-\a)^\kappa
+\end{equation}
+where each $\x_\kappa = \b + t_\kappa (\a-\b)$, $0<t_\kappa < 1$;
+$\kappa! = \prod_{k=1}^d \kappa_k !$ is the multi-variate factorial, and
+\[ \zeta^\kappa_S = \sum_{\substack{k=1\\ \kappa-\e_k\in S}}^d
+   \frac{\kappa_k}{|\kappa|} \;.\]
+\end{theorem}
+\begin{proof}
+Denote \[ \x(t) = \b + t\,(\a-\b), \]
+then $f(\a) = f(\x(1))$, $f(\b) = f(\x(0))$.
+We will prove the integral form of this theorem
+\begin{equation} \label{taylor_integ}
+   f(\b) = \sum_{\kappa\in S} \frac{f^{(\kappa)}(\a)}{\kappa!} (\b-\a)^\kappa
+         + \sum_{\kappa\in \partial S} \zeta^\kappa_S \int_0^1
+           \frac{f^{(\kappa)}(\x(t))}{\kappa!} (\b-\a)^\kappa \,d\,t^{|\kappa|}
+,\end{equation}
+where $|\kappa| = \sum_{k=1}^d \kappa_k$.
+This leads to (\ref{taylor}) by the mean value theorem.
+
+We use induction.  The base case is when $S$ contains only one member
+$(0,\ldots,0)$.  In this case, $\partial S = \{ \e_k, k = 1,\ldots,d \}$,
+and $\zeta^{\e_k}_S = 1$ for each $k$.
+By the fundamental theorem of calculus and the chain rule, we have
+\[ f(\b) = f(\a) + \int_1^0 \frac{d\,f(\x(t))}{dt} \,dt
+         = f(\a) + \sum_{\kappa\in \partial S}
+                   \int_0^1 f^{(\kappa)}(\x(t)) (\b-\a)^\kappa \,dt , \]
+which is (\ref{taylor_integ}) for this base case.
+
+Now for any expansion order set $S$, the hypothesis is that
+(\ref{taylor_integ}) holds true for any subset of $S$.
+Because $S$ is finite,
+there exists a ${\hat\kappa}\in S$ such that $|{\hat\kappa}|\ge |\kappa|$ for
+any $\kappa\in S$.  Note that ${\hat\kappa} + e_k \in \partial \Omega$ for
+any $1\le k\le d$.  Let $S' = \{ \kappa\in S \;\mid\; \kappa\ne{\hat\kappa}\}$,
+then by the definition of expansion order set, ${\hat\kappa}-\e_k\in S'$ for
+any $k$ such that ${\hat\kappa}_k>0$.  Therefore, we have
+${\hat\kappa}\in \partial S'$ and
+\[ \zeta^{\hat\kappa}_{S'} = \sum_{\substack{k=1\\ {\hat\kappa}-\e_k\in S'}}^d
+                            \frac{{\hat\kappa}_k}{|{\hat\kappa}|}
+                          = \sum_{\substack{k=1\\ {\hat\kappa}_k>0}}^d
+                            \frac{{\hat\kappa}_k}{|{\hat\kappa}|} = 1 \;.\]
+Integration by parts results in
+\[\begin{split}
+&  \int_0^1 \frac{f^{({\hat\kappa})}(\x(t))}{{\hat\kappa}!}
+   (\b-\a)^{\hat\kappa} \,d\,t^{|{\hat\kappa}|} \\
+=& \frac{f^{({\hat\kappa})}(\a)}{{\hat\kappa}!} (\b-\a)^{\hat\kappa}
+ - \int_0^1 (\b-\a)^{\hat\kappa} \,t^{|{\hat\kappa}|}
+   \,d \frac{f^{({\hat\kappa})}(\x(t))}{{\hat\kappa}!} \\
+=& \frac{f^{({\hat\kappa})}(\a)}{{\hat\kappa}!} (\b-\a)^{\hat\kappa}
+ + \sum_{k=1}^d \int_0^1 \frac{f^{({\hat\kappa}+\e_k)}(\x(t))}{{\hat\kappa}!}
+   (\b-\a)^{{\hat\kappa}+\e_k} \,t^{|{\hat\kappa}|} \,dt \\
+=& \frac{f^{({\hat\kappa})}(\a)}{{\hat\kappa}!} (\b-\a)^{\hat\kappa}
+ + \sum_{k=1}^d \frac{{\hat\kappa}_k+1}{|{\hat\kappa}+\e_k|} \int_0^1
+   \frac{f^{({\hat\kappa}+\e_k)}(\x(t))} {({\hat\kappa}+\e_k)!}
+   (\b-\a)^{{\hat\kappa}+\e_k} dt^{|{\hat\kappa}+\e_k|} \\
+=& \frac{f^{({\hat\kappa})}(\a)}{{\hat\kappa}!} (\b-\a)^{\hat\kappa}
+ + \sum_{\kappa\in \{{\hat\kappa}+\e_k,k=1,\ldots,d\}} \frac{\kappa_k}{|\kappa|}
+   \int_0^1 \frac{f^{(\kappa)}(\x(t))} {\kappa!} (\b-\a)^{\kappa} dt^{|\kappa|}
+\;.
+\end{split}\]
+Note that $S'$ is also an expansion order set, and we can
+incorporate this integration by parts into the induction hypothesis for $S'$.
+Combining this with the fact that $S = S' \cup \{{\hat\kappa}\}$, we get
+\[\begin{split}
+f(\b) =& \sum_{\kappa\in S'} \frac{f^{(\kappa)}(\a)}{\kappa!} (\b-\a)^\kappa
+      + \sum_{\kappa\in \partial S'} \zeta^\kappa_{S'} \int_0^1
+        \frac{f^{(\kappa)}(\x(t))}{\kappa!} (\b-\a)^\kappa \,d\,t^{|\kappa|} \\
+      =& \sum_{\kappa\in S} \frac{f^{(\kappa)}(\a)}{\kappa!} (\b-\a)^\kappa
+      + \sum_{\kappa\in \partial S' \setminus \{{\hat\kappa}\}}
+        \zeta^\kappa_{S'} \int_0^1
+        \frac{f^{(\kappa)}(\x(t))}{\kappa!} (\b-\a)^\kappa \,d\,t^{|\kappa|} \\
+     &+ \sum_{\kappa\in \{{\hat\kappa}+\e_k,k=1,\ldots,d\}}
+        \frac{\kappa_k}{|\kappa|} \int_0^1
+        \frac{f^{(\kappa)}(\x(t))} {\kappa!} (\b-\a)^{\kappa} dt^{|\kappa|}\;.
+\end{split}\]
+We complete the proof by unifying the previous two summations into
+a single summation over $\partial S$.
+From the definition of $\hat\kappa$ and $S'$, we see that
+\[ \partial S = \left( \partial S' \setminus \{\hat\kappa\} \right)
+                \cup \{ {\hat\kappa}+\e_k, k=1,\ldots,d \} \;.\]
+In addition, if $\kappa \notin \{ {\hat\kappa}+\e_k, k=1,\ldots,d \}$, then
+$\kappa-\e_k\in S \Longleftrightarrow \kappa-\e_k\in S'$.
+Otherwise, if $\kappa = {\hat\kappa}+\e_k$,
+then $\kappa-\e_{k'}\in S \Longleftrightarrow \kappa-\e_{k'}\in S'$ or $k'=k$.
+We have
+\[ \zeta^\kappa_S = \begin{cases}
+   \zeta^\kappa_{S'} & \kappa \notin \{ {\hat\kappa}+\e_k, k=1,\ldots,d \} \\
+   \zeta^\kappa_{S'} + \frac{\kappa_k}{|\kappa|} &
+                      \kappa \in \{ {\hat\kappa}+\e_k, k=1,\ldots,d \} \;.
+   \end{cases}\]
+Considering the fact that $\zeta^\kappa_{S'} = 0$ for
+$\kappa \in \{ {\hat\kappa}+\e_k, k=1,\ldots,d \}$, but
+$\kappa \notin \partial S'$, we have
+\[ \zeta^\kappa_S = \begin{cases}
+   \zeta^\kappa_{S'} &
+       \kappa \in \left( \partial S' \setminus \{\hat\kappa\} \right)
+       \setminus \{ {\hat\kappa}+\e_k, k=1,\ldots,d \} \\
+   \zeta^\kappa_{S'} + \frac{\kappa_k}{|\kappa|} &
+       \kappa \in \left( \partial S' \setminus \{\hat\kappa\} \right)
+       \cap \{ {\hat\kappa}+\e_k, k=1,\ldots,d \} \\
+   \frac{\kappa_k}{|\kappa|} &
+       \kappa \in \{ {\hat\kappa}+\e_k, k=1,\ldots,d \} \setminus
+       \left( \partial S' \setminus \{\hat\kappa\} \right) \;.
+   \end{cases}\]
+This allows us to unify the summation over
+$\partial S' \setminus \{\hat\kappa\}$ and the summation over
+$\{ {\hat\kappa}+\e_k, k=1,\ldots,d \}$ into a single summation, and get
+\[ f(\b) = \sum_{\kappa\in S} \frac{f^{(\kappa)}(\a)}{\kappa!} (\b-\a)^\kappa
+      + \sum_{\kappa\in \partial S}
+        \zeta^\kappa_S \int_0^1
+        \frac{f^{(\kappa)}(\x(t))}{\kappa!} (\b-\a)^\kappa \,d\,t^{|\kappa|}. \]
+This completes the induction proof.
+\end{proof}
+A special case of this theorem is when the expansion order set $S$ is
+$ \{ \kappa \;\mid\; |\kappa| < N \} $, in which case its boundary
+$ \partial S = \{ \kappa \;\mid\; |\kappa| = N+1 \} $.
+For any $\kappa \in \partial S$, $\kappa-\e_k \in S$ whenever $\kappa_k>0$,
+and
+\[ \zeta^\kappa_S = \sum_{\substack{k=1\\ \kappa-\e_k\in S}}^d
+   \frac{\kappa_k}{|\kappa|} = 1 \]
+In this special case, (\ref{taylor}) becomes the standard Taylor's theorem in
+multi-dimensional space.
+\[ f(\b) = \sum_{|\kappa|=0}^N \frac{f^{(\kappa)}(\a)}{\kappa!} (\b-\a)^\kappa
+      + \sum_{|\kappa|=N+1} 
+        \frac{f^{(\kappa)}(\x_\kappa)}{\kappa!} (\b-\a)^\kappa . \]
+This shows that Theorem \ref{taylor_thm} is indeed an extension to the standard
+multi-variate Taylor's theorem.
+
+
+
+\subsection{Mathematical formulation}
+Let $\x_i, i=1,\ldots,n$ be $n$ distinct value nodes, and
+$\y_i, i=1,\ldots,m$ be in $m$ distinct gradient nodes in a
+$d$-dimensional space $\R^d$.  The target function
+$f$ is measured at each value node, and the gradient of $f$ is measured
+at each gradient node.  These measurements are given as
+${\hat f}(\x_i)\in \R, i=1,\ldots,n$ and
+$\nabla {\hat f}(\y_i)\in \R^d, i=1,\ldots,m$, respectively.  The measurement
+errors are assumed to be mutually independent random variables with zero mean,
+and their variances are given as
+\[ e_{a\,i}^2 = E\left[\left({\hat f}(\x_i) - f(\x_i)\right)^2\right] \in \R,
+   \quad i = 1,\ldots,n ,\]
+\[ e_{b\,ik}^2 =
+   E\left[\left(\nabla_k{\hat f}(\y_i) - \nabla_k f(\y_i)\right)^2\right]
+   \in \R^d, \quad i = 1,\ldots,m , \]
+where $\nabla_k$ is the $k$th component of the gradient operator in $\R^d$.
+These measurement errors can be set to 0 for exact measurements of the function.
+The value of our interpolant at point $\z\in \R^d$ is a linear combination
+of the measurements ${\hat f}(\x_i)$ and $\nabla {\hat f}(\x_i)$:
+\begin{equation} \label{interp_nd}
+  {\tilde f}(\z) = \sum_{i=1}^n a_i {\hat f}(\x_i)
+                + \sum_{i=1}^m \b_i \cdot \nabla {\hat f}(\y_i),
+\end{equation}
+where the coefficients $a_i\in \R$ satisfies the normalization condition
+\begin{equation} \label{normalize_nd}
+  \sum_{i=1}^n a_i = 1,
+\end{equation}
+and $\cdot$ denotes inner product in $\R^d$.
+\[ \b_i \cdot \nabla {\hat f}(\y_i)
+ = \sum_{k=1}^d b_{ik}\, \nabla_k {\hat f}(\y_i) . \]
+Let $S$ be a given expansion order set (Definition \ref{exp_set}) of the
+multi-variate interpolations scheme.  The size of $S$ should be approximately
+equal to or larger than the total order of the given data, $n + m\,d$ in order
+to take advantage of all the given information about the function $f$.
+For example, $S$ can be chosen to cover the least basis \cite[]{least_interp}
+of the nodes.
+With any given $S$,
+each $f(\x_i)$ can be expanded using the extended Taylor's theorem (Theorem
+\ref{taylor_thm}) we proved in the previous subsection.
+\[ f(\x_i) = \sum_{\kappa\in S} \frac{f^{(\kappa)}(\z)}{\kappa!}
+             (\x_i-\z)^\kappa + \sum_{\kappa\in \partial S} \eta^\kappa_S \,
+           \frac{f^{(\kappa)}(\xi_{i\kappa})}{\kappa!} (\x_i-\z)^\kappa \;,\]
+where $\partial S$ is the boundary of $S$ (Definition \ref{boundary_set}), and
+\[ \eta^\kappa_S = \sum_{\substack{k=1\\ \kappa-\e_k\in S}}^d
+   \frac{\kappa_k}{|\kappa|} . \]
+Define \[S_k = \{ \kappa \;\mid\; \kappa + \e_k \in S, \; \kappa_k \ge 0 \} ,\]
+which are also expansion order sets by definition.
+Each $\nabla f(\y_i)$ can also be expanded as
+\[ \begin{split}
+   \nabla_k f(\y_i)
+&= \sum_{\kappa\in S_k} \frac{f^{(\kappa+\e_k)}(\z)}{\kappa!} (\y_i-\z)^\kappa
+ + \sum_{\kappa\in \partial S_k} \eta^\kappa_{S_k} \,
+   \frac{f^{(\kappa+\e_k)}(\eta_{i\kappa})}{\kappa!} (\y_i-\z)^\kappa \\
+&= \sum_{\substack{\kappa\in S\\ \kappa_k>0}}
+   \frac{f^{(\kappa)}(\z)}{(\kappa-\e_k)!} (\y_i-\z)^{\kappa-\e_k}
+ + \sum_{\substack{\kappa\in \partial S\\ \kappa_k>0}}
+   \eta^{\kappa-\e_k}_{S_k} \,
+   \frac{f^{(\kappa)}(\eta_{i\kappa})}{(\kappa-\e_k)!} (\y_i-\z)^{\kappa-\e_k}
+\end{split} \]
+where $\partial S_k$ is the boundary of $S_k$.
+Incorporate these expansions into (\ref{interp_nd}),
+the residual of the interpolation is
+\[ \begin{split}
+  r(\z) = {\tilde f}(\z) - f(\z) 
+&= \sum_{\substack{\kappa\in S\\ \kappa\ne\0}} f^{(\kappa)}(\z)
+   \left(\sum_{i=1}^n a_i \frac{(\x_i-\z)^\kappa}{\kappa!}
+       + \sum_{\substack{k=1\\ \kappa_k>0}}^d \sum_{i=1}^m b_{ik}
+         \frac{(\y_i-\z)^{\kappa-\e_k}}{(\kappa-\e_k)!} \right) \\
+&+ \sum_{\kappa\in \partial S} \sum_{i=1}^n f^{(\kappa)}(\xi_\kappa)
+   \left( a_i \frac{(\x_i-\z)^\kappa}{\kappa!} \right) \\
+&+ \sum_{\kappa\in \partial S}
+   \sum_{\substack{k=1\\ \kappa_k>0}}^d \sum_{i=1}^m f^{(\kappa)}(\eta_\kappa)
+   \left( b_{ik} \frac{(\y_i-\z)^{\kappa-\e_k}}{(\kappa-\e_k)!} \right) \\
+&+ \sum_{i=1}^n \left({\hat f}(\x_i) - f(\x_i)\right) a_i
+ + \sum_{k=1}^d \sum_{i=1}^m
+   \left(\nabla_k {\hat f}(\y_i) - \nabla_k f(\y_i)\right) b_{ik} .
+\end{split} \]
+The $\kappa=\0$ term is canceled out due to the normalization
+condition (\ref{normalize_nd}).
+
+Similar to the 1-D interpolation, the ``magnitude'' $\beta > 0$ and
+``roughness'' $\gamma > 0$ are two given parameters that describe the behavior
+of the function $f$.  Determination of these parameters is similar to
+the 1-D case discussed in Sections \ref{s:beta} and \ref{s:gamma}.
+We consider both
+parameters as given in this section.  We assume that each $f^{\kappa}(\z)$
+is a random variable with zero mean and standard deviation
+$\beta\gamma^{|\kappa|}$.  These random variables are assumed to be mutually
+independent, and are independent of the measurement errors.  The variance
+of the interpolation residual $r(\z)$ under these assumptions is
+\[\begin{split}
+   E\left[r(\z)^2\right]
+&= \beta^2\: \sum_{\substack{\kappa\in S\\ \kappa\ne\0}} \gamma^{2|\kappa|}
+   \left(\sum_{i=1}^n a_i \frac{(\x_i-\z)^\kappa}{\kappa!}
+       + \sum_{\substack{k=1\\ \kappa_k>0}}^d \sum_{i=1}^m b_{ik}
+         \frac{(\y_i-\z)^{\kappa-\e_k}}{(\kappa-\e_k)!} \right)^2 \\
+&+ \beta^2 \sum_{\kappa\in \partial S} \sum_{i=1}^n
+   \gamma^{2|\kappa|} \left( a_i \frac{(\x_i-\z)^\kappa}{\kappa!} \right)^2
+ + \beta^2 \sum_{\kappa\in \partial S}
+   \sum_{\substack{k=1\\ \kappa_k>0}}^d \sum_{i=1}^m \gamma^{2|\kappa|}
+   \left( b_{ik} \frac{(\y_i-\z)^{\kappa-\e_k}}{(\kappa-\e_k)!} \right)^2 \\
+&+ \sum_{i=1}^n e_{a\,i}^2 a_i^2
+ + \sum_{k=1}^d \sum_{i=1}^m  e_{b\,ik}^2 b_{ik}^2 ,
+\end{split}\]
+which is in quadratic form of the coefficients vector
+\[ [a\,b] = [a_1\ldots a_n\,
+             b_{11}\ldots b_{m1}\ldots\ldots b_{1d}\ldots b_{md}] .\]
+In fact, denote the elements in the set $S$ as
+\[ S = \{ \0, \kappa_S^1, \kappa_S^2, \ldots, \kappa_S^N \} ,\]
+where each $\kappa_S^l$ is a $d$-dimensional index, and $N$ is the size of the
+set $S\setminus\{\0\}$.  Let $X^a$ be an $N \times n$ matrix with each element
+\[ X^a_{l\,i} = \gamma^{|\kappa_S^l|} \:
+                 \frac{(\x_i-\z)^{\kappa_S^l}}{\kappa_S^l!} . \]
+Each $X^b_k, k=1,\ldots,d$ be an $N \times m$ matrix with each element
+\[ X^b_{k\,l\,i} = \left\{ \begin{aligned}
+   & 0, && \kappa^l_{S\,k} = 0 \\
+   & \gamma^{|\kappa_S^l|} \:
+     \frac{(\x_i-\z)^{\kappa_S^l-\e_k}}{(\kappa_S^l-\e_k)!},
+   && \kappa^l_{S\,k} > 0
+\end{aligned} \right. \]
+and \[ X^b = \left[ X^b_1\, \ldots X^b_d \; \right] \]
+be an $N \times m\,d$ matrix.
+Also let $G$ be an $n+m\,d \times n+m\,d$ diagonal matrix with
+\[ G^2_{jj} = \left\{ \begin{aligned}
+      & \sum_{\kappa\in \partial S} \left( \gamma^{|\kappa|} \:
+        \frac{(\x_j - \z)^\kappa}{\kappa!} \right)^2, && 1\le j\le n \\
+      & \sum_{\substack{\kappa\in \partial S\\ \kappa_k>0}}
+        \left( \gamma^{|\kappa|}\:
+        \frac{(\y_{i} - z)^{\kappa-\e_k}}{(\kappa-\e_k)!} \right)^2, \quad
+        && j=n+m(k-1)+i,\; 1\le k\le d,\; 1\le i\le m
+\end{aligned} \right.\]
+and $H$ also be an $n+m\,d \times n+m\,d$ diagonal matrix with
+\[ H_{jj} = \left\{ \begin{aligned}
+      & e_{a\,j}, && j=1,\ldots,n \\
+      & e_{b\,ik}, && j=n+m(k-1)+i,\quad 1\le k\le d,\quad 1\le i\le m \;.
+\end{aligned} \right. \]
+The matrix form of the expectation of $r(\z)^2$ is the same as in the
+1-D case
+\[ E\left[r(z)^2\right] = [a\,b] \left( \beta^2
+    \left[\begin{array}{c}X^{a\,\mathrm T}\\X^{b\,\mathrm T}\end{array}\right]
+    \left[\: X^a\,X^b \:\right] + \beta^2 G^2 + H^2 \right) [a\,b]^{\mathrm T}.
+\]
+Denote $n+m\,d \times n+m\,d$ matrix
+\[ A = \beta^2
+   \left[\begin{array}{c}X^{a\,\mathrm T}\\X^{b\,\mathrm T}\end{array}\right]
+   \left[\: X^a\,X^b \:\right] + \beta^2 G^2 + H^2 ,\]
+and length $n+m\,d$ vector 
+\[ c_i = \begin{cases} 1 & i=1,\ldots,n\\ 0 & i=n+1,\ldots,n\,d+m \;.\end{cases}
+\]
+We get the same quadratic programming problem as in the 1-D case
+\begin{equation} \label{quadprog_nd}
+\min\; [a\,b]\: A\: [a\,b]^{\mathrm T}, \quad c\: [a\,b]^{\mathrm T} = 1.
+\end{equation}
+Once $a$ and $b$ are calculated by solving this quadratic programming, the
+value of the interpolant at $\z$ can be computed using (\ref{interp_nd}).
+
+
+
+% \subsection{Properties of the interpolant}
+% Due to the strong similarity in the formulation, the properties of the
+% multi-variate interpolant is almost identical to the univariate case.  The
+% mathematical proof of these properties are also similar to the 1-D
+% case.  For this reason, we will skip details where the proofs are almost the
+% same as in Section \ref{}.  We assume in this section that the measurement
+% is exact, i.e., the uncertainties in the measurements $e_{a\,i}$ and
+% $e_{b\,i\,k}$ are zero.  Another assumption we make is that
+% \begin{equation} \label{multivar_ass}
+% m > 0 \Longrightarrow \e_k \in S, k=1,\ldots,d .
+% \end{equation}
+% This assumption ensures that if there is at least one gradient
+% datapoint, then the interpolation should be at least first-order in each
+% dimension.  Since the order of $\kappa^l_S$ in the set $S$ does not affect
+% the formulation, in this case we can denote
+% \[ \kappa^l_S = \e_l, \quad l = 1,\ldots,d \]
+% for the ease of manipulation.
+% 
+% 
+% 
+% \subsubsection{Continuity and smoothness}
+% Similar to the 1-D case, we show that the interpolant is a
+% multi-variate rational function having no poles in $\R^d$, thus is continuous
+% and smooth.  Furthermore, as $||\z||\to\infty$, $f(\z)$ asymptotically converges
+% to the average of the given function values $\frac1n \sum f(\x_i)$.  Finally,
+% we show that the interpolant goes through the datapoints in the same way
+% manner as the univariate case.
+% 
+% \begin{lemma} \label{lem_pd_nd}
+% Let each $\x_i\ne\x_j$ for any $1\le i<j\le n$, and each $\y_i\ne \y_j$ for
+% any $1\le i<j\le m$.  Let $X^a$, $X^b$ and $G$ be the matrices described in
+% the previous section with $N = |S| \ge m\,d$, then
+% \[ A = \beta^2 \left(
+%    \left[\begin{array}{c}X^{a\,\mathrm T}\\X^{b\,\mathrm T}\end{array}\right]
+%    \left[\: X^a\,X^b \:\right] + G^2 \right) \]
+% is positive-definite when $\z\ne\x_i$ for any $i=1,\ldots,n$; or rank
+% $n+m\,d-1$ and positive-semi-definite when $\z=\x_i$ for some $i$.
+% \end{lemma}
+% Its proof follows the same idea as Lemma \ref{lem_pd} in the 1-D case.
+% But since we don't have the Vandermonde matrix structure in $X^b$, a
+% different approach is used to show that
+% $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ when $b\ne 0$.
+% \begin{proof}
+% We first prove that $A$ is positive-definite when $\z\ne\x_i$ by showing that
+% $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ whenever $a\ne0$ or $b\ne0$.
+% Since the first $n$ diagonal elements of $G$ is nonzero when $\z\ne\x_i$,
+% $G\:[a\,b]^{\mathrm T} \ne 0$ if $a\ne0$, in which case
+% \[[a\,b]\:A\:[a\,b]^{\mathrm T} \ge 
+%    \beta^2 \left(G\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+%    \left(G\: [a\,b]^{\mathrm T}\right) > 0 . \]
+% If $m=0$, there is no $b$, the proof that $A$ is positive-definite is complete.
+% When $m>0$, we still need to show that $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ when
+% $a=0$ but $b\ne0$.  Two cases are considered: the first case is when
+% $\z\ne\y_i$ for any $i$. All diagonals in $G$ are nonzero in this case, and we
+% also have $G\: [a\,b]^{\mathrm T}\ne 0$, hence
+% $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$.
+% The second case is when $\z=\y_i$ for some $i$.  In this case, the diagonal
+% elements of $G$ corresponding to the $\y_i$ are 0, i.e.,
+% $$ G_{jj} = 0,\quad j=n+m(k-1)+i,\quad k=1,\ldots,d, $$
+% while all other diagonal elements of $G$ are nonzero.  Therefore, we only
+% need to prove $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ when only
+% $b_{ik}, k=1,\ldots,d$ are nonzero.  In this case, by denoting
+% $ \kappa^l_S = \e_l, l = 1,\ldots,d $, we have
+% $ \kappa^l_{S\,k} > 0 \Longleftrightarrow l = k $ when $l\le d$, and then
+% $ X^{b\,k}_{l\,i} = \delta_{lk}$.
+% The first $d$ elements of $X^b\: b^{\mathrm T}$ then becomes
+% \[ \left[X^b\: b^{\mathrm T}\right]_l = \sum_{k=1}^d X^{b\,k}_{l\,i} b_{ik}
+%  = b_{il}, \quad l=1,\ldots,d . \]
+% Since $b_{il}, \quad l=1,\ldots,d$ the only possible nonzero elements,
+% $X^b\: b^{\mathrm T} \ne 0$ if $b\ne0$, hence
+% \[ [a\,b]\: A\: [a\,b]^{\mathrm T} \ge
+%    \beta^2 \left([X^a\,X^b]\: [a\,b]^{\mathrm T}\right)^{\mathrm T}
+%    \left([X^a\,X^b]\: [a\,b]^{\mathrm T}\right) =
+%    \beta^2 \left(X^b\: b^{\mathrm T}\right)^{\mathrm T}
+%    \left(X^b\: b^{\mathrm T}\right) \ge 0 . \]
+% So we have $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ for both cases.
+% This proves that $A$ is positive-definite when $\z\ne\x_i$ for any $i$.
+% 
+% We then prove that $A$ is rank-1 deficient positive-semi-definite when
+% $\z=\x_i$.  Since $[a\,b]\:A\:[a\,b]^{\mathrm T} \ge 0$ by definition of $A$,
+% we only need to show that the nullspace of $A$ is 1-D, spanned by
+% $[a^{bi}\,b^{bi}]$, where
+% \[ a^{bi}_j = \begin{cases} 1, & j = i\\ 0, & j\ne i \end{cases}
+%    \qquad \mbox{and} \qquad b^{bi} = 0 . \]
+% From the definition of $X^a$ and $G$,
+% $X^a\: a^{bi}]^{\mathrm T} = 0$ and $G\: [a^{bi}\,b^{bi}] = 0$ when
+% $\z=\x_i$, so 
+% \[ [a^{bi}\,b^{bi}]\:A\:[a^{bi}\,b^{bi}]^{\mathrm T} = 0, \]
+% and $[a^{bi}\,b^{bi}]$ is in the nullspace of $A$.  On the other hand,
+% if $[a\,b]$ is not spanned by $[a^{bi}\,b^{bi}]$, then either $a_j\ne 0$ for
+% some $j\ne i$, or $b\ne 0$.  In the first case, because $\z\ne\x_j$, the
+% $j$th diagonal term of $G$ is nonzero, and $G\:[a\,b]\ne 0$, thus
+% $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$.  In the later case, $b\ne 0$, two
+% situations are considered: when $\z\ne\y_j$ for any $j$, and when
+% $\z=\y_{i'}$ for some $i'$.  In the first situation,
+% $G_{jj}\ne 0, \forall j>n$, thus
+% \[ b\ne 0 \Longrightarrow G\:[a\,b]\ne 0 \Longrightarrow
+% [a\,b]\:A\:[a\,b]^{\mathrm T} > 0. \]
+% In the second situation,  the diagonal
+% elements of $G$ corresponding to the $\y_i$ are 0, i.e.,
+% $ G_{jj} = 0,\quad j=n+m(k-1)+i',\quad k=1,\ldots,d, $
+% while all other diagonal elements of $G$ are nonzero.  Therefore,
+% $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ when $b_{jk}\ne0$ for any $k$ and $j\ne i'$.
+% On the other hand, when $b_{jk}=0$ for all $k$ and $j\ne i'$,
+% $b\ne 0 \Longrightarrow b_{i'l}\ne0$ for some $l$, and
+% \[ \left[X^b\: b^{\mathrm T}\right]_l
+%  = \sum_{j=1}^m \sum_{k=1}^d X^{b\,k}_{l\,j} b_{jk}
+%  = \sum_{k=1}^d X^{b\,k}_{l\,i'} b_{i'k} = b_{i'l} \ne 0 \]
+% Therefore $[X^a\,X^b]\: [a\,b]^{\mathrm T} \ne 0$ and
+% $[a\,b]\:A\:[a\,b]^{\mathrm T} > 0$ whenever $b\ne 0$.
+% This proves that $[a^{bi}\,b^{bi}]$ is the only basis of the nullspace of $A$.
+% Therefore, $A$ is rank-1 deficient positive-semi-definite when $\z=\x_i$.
+% \end{proof}
+% 
+% From this lemma, when $\x\ne\x_i$, $A$ is positive-definite, and the solution
+% of the quadratic programming can be obtained by taking derivative of its
+% Lagrangian.  Same as the 1-D case, the interpolation coefficients can
+% be solved by the linear system
+% \begin{equation}\begin{split} \label{calcab_nd}
+% A\: [a^* b^*]^{\mathrm T} = c^{\mathrm T}, \\
+% [a\,b] = \frac{[a^* b^*]}{c\: [a^* b^*]^{\mathrm T}}
+% \end{split}\end{equation}
+% where $c$ is a vector defined at the end of the previous section.
+% Incorporate the cofactor form of $A^{-1}$, we get
+% \[ a_i = a^*_i \left/ \sum_{j=1}^n a^*_j\right. = 
+%    \sum_{j=1}^n A^*_{i\,j}\left/\sum_{k=1}^n\sum_{j=1}^n A^*_{k\,j}
+%    \right., \quad
+%    b_i = b^*_i\left/\sum_{j=1}^n a^*_j\right. =
+%    \sum_{j=1}^n A^*_{i+n\,j}\left/\sum_{k=1}^n\sum_{j=1}^n A^*_{k\,j}
+%    \right. , \]
+% where each $A^*_{ij}$ is a cofactor of matrix $A$.  Since each element
+% of $A$ is a multi-variate polynomial of $\z$, each cofactor of $A$ is also
+% a multi-variate polynomial of $\z$.  Therefore, incorporating $a$ and $b$ into
+% (\ref{interp_nd}), the interpolant
+% \begin{equation} \label{rational_nd}
+%   {\tilde f}(z) = \left(\sum_{i=1}^n f(x_i) \sum_{j=1}^n A^*_{i\,j} +
+%                         \sum_{i=1}^m f'(y_i) \sum_{j=1}^n A^*_{i+n\,j}\right)
+%   \left/ \left(\sum_{i=1}^n\sum_{j=1}^n A^*_{i\,j}\right)\right.
+% \end{equation}
+% is a multi-variate rational function of $\z$ when $\z\ne\x_i$.  When $\z=\x_i$,
+% $A$ is singular and (\ref{calcab_nd}) is invalid, but the rational form
+% (\ref{rational_nd}) for $\tilde f$ still holds for the following reason:
+% 
+% When $\z=\x_i$, we have shown in the proof of Lemma \ref{lem_pd_nd} that
+% $ [a^{bi}\,b^{bi}] $ spans the 1-D nullspace of $A$, where
+% \[ a^{bi}_j = \begin{cases} 1, & j = i\\ 0, & j\ne i \end{cases}
+%    \qquad \mbox{and} \qquad b^{bi} = 0 . \]
+% Since it also satisfies the constraint $c\: [a^{bi}\,b^{bi}]^{\mathrm{T}} $,
+% it is the unique solution to the quadratic programming (\ref{quadprog_nd}).
+% Therefore,
+% \[ {\tilde f}(\x_i) = \sum_{j=1}^n a^{bi}_j {\hat f}(\x_j)
+%           + \sum_{j=1}^m \b^{bi}_j \cdot \nabla {\hat f}(\y_j) = f(\x_i). \]
+% On the other hand, when $\z=\x_i$, the $i$the column and row of $A$ are all
+% zero, and therefore $X^*_{ii}$ is the only nonzero cofactor of $A$.
+% $X^*_{ii}$ also must be nonzero because $A$ is only rank-1 deficient.
+% Incorporate it into (\ref{rational_nd}), we find that the value of $\tilde f$
+% matches
+% the rational formula at value datapoints $\x_i$.  This analysis is concluded
+% by following lemma:
+% \begin{proposition} \label{prop_rational_nd}
+% The multi-variate interpolant $\tilde f$ given by (\ref{interp_nd}) and
+% (\ref{quadprog_nd}) can be represented in the form of (\ref{rational_nd}),
+% which is a multi-variate rational function.
+% \end{proposition}
+% 
+% To prove that the interpolant is smooth, we need to show that the rational
+% function (\ref{rational_nd}) has no poles in $\R^d$, i.e.,
+% \[ \sum_{i=1}^n\sum_{j=1}^n A^*_{i\,j} = c\:A^*c^{\mathrm T} \ne 0,
+%    \quad \forall \z\in\R^d . \]
+% When $\z\ne\x_i$, $A$ is positive-definite, so $|A|>0$, $A^* = |A| A^{-1}$
+% is positive-definite, and $c\:A^*c^{\mathrm T} > 0$.
+% When $\z=\x_i$, all elements of the adjugate matrix are 0 except $A^*_{ii}$,
+% so $c\:A^*c^{\mathrm T} = A^*_{ii}$, which is nonzero because $A$ is only
+% rank-1 deficient.  Therefore, the numerator of the rational function
+% (\ref{rational_nd}) has no root, and we have
+% \begin{proposition}
+% The interpolant $\tilde f$ given by (\ref{interp_nd}) and (\ref{quadprog_nd})
+% is continuous and infinitely differentiable in $\R^d$.
+% \end{proposition}
+
+
+
+
+\subsection{Numerical examples}
+
+In this section, we apply our multi-variate interpolation scheme to the
+following example functions in 2-D:
+\begin{enumerate}
+\item A two-dimensional cosine wave $f(x) = \cos (x_1 + x_2)$.
+      The contour plot of this function consists of straight, diagonal lines.
+\item The two-dimensional Runge function $f(x) = \dfrac{1}{1 + x_1^2 + x_2^2}$.
+      The contour plot of this function consists of concentric circles centered
+      at the origin.
+\end{enumerate}
+The domain of interpolation for both functions is $-2 < x_1 < 2, -2 < x_2 < 2$.
+
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.3in]{output_interp/random_cos_2d_1d_016.png}
+\includegraphics[width=2.3in]{output_interp/random_cos_2d_1d_036.png}
+\includegraphics[width=2.3in]{output_interp/random_grad_cos_2d_1d_016.png}
+\includegraphics[width=2.3in]{output_interp/random_grad_cos_2d_1d_036.png}
+\includegraphics[width=3.2in]{output_interp/cos_2d_convergence_random_grad.png}
+\caption{Interpolating the 2-D cosine function using 16 (left) and
+         36 (right) quasi-random grid points.  The upper two plots are contour
+         lines of the interpolant constructed without gradient information;
+         the lower two plots are contours of the interpolant constructed with
+         gradient information on each grid point.
+         In the convergence plot (bottom), the horizontal axis is the
+         number of grid points;
+         the solid lines indicate $L_2$ errors, and the dotted lines indicate
+         $L_{\infty}$ errors.  The upper lines are the approximation errors
+         without using gradient information; the lower lines are the
+         the approximation errors using gradient information.}
+\label{interp_cos2d_randomgrad}
+\end{figure}
+
+\begin{figure}[tb!] \centering
+\includegraphics[width=2.3in]{output_interp/random_runge_2d_1d_016.png}
+\includegraphics[width=2.3in]{output_interp/random_runge_2d_1d_036.png}
+\includegraphics[width=2.3in]{output_interp/random_grad_runge_2d_1d_016.png}
+\includegraphics[width=2.3in]{output_interp/random_grad_runge_2d_1d_036.png}
+\includegraphics[width=3.2in]
+                {output_interp/runge_2d_convergence_random_grad.png}
+\caption{Interpolating the 2-D Runge function using 16 (left) and
+         36 (right) quasi-random grid points.  The upper two plots are contour
+         lines of the interpolant constructed without gradient information;
+         the lower two plots are contours of the interpolant constructed with
+         gradient information on each grid point.
+         In the convergence plot (bottom), the horizontal axis is the
+         number of grid points;
+         the solid lines indicate $L_2$ error, and the dotted lines indicate
+         $L_{\infty}$ error.  The upper lines are the approximation errors
+         without using gradient information; the lower lines are the
+         the approximation errors using gradient information.}
+\label{interp_runge2d_randomgrad}
+\end{figure}
+
+Figure \ref{interp_cos2d_randomgrad} shows the interpolation results on the
+two-dimensional cosine function, and Figure \ref{interp_runge2d_randomgrad}
+shows the interpolation results on the two-dimensional Runge function.
+As can be seen, the interpolation scheme works well in two-dimensional space
+for arbitrarily scattered datapoints, with and without using gradient
+information.  In addition, the contour lines of the interpolant constructed
+using gradient information are more accurate than the interpolant constructed
+without gradient on the same number of grid points.
+The convergence plots also reveal this information.  In both convergence plots,
+the dotted lines on the upper side of the plots show the $L^\infty$ error of
+the interpolants constructed without using the gradient information;
+the dotted lines on the lower side of the plots show the $L^\infty$ error of
+the interpolants constructed using the gradient information;
+the solid lines on the upper side of the plots show the $L^2$ error of
+the interpolants constructed without using the gradient information;
+the solid lines on the lower side of the plots show the $L^2$ error of
+the interpolants constructed using the gradient information.
+As seen from the convergence plots, the error of the interpolant constructed
+with gradient information is much more accurate.
+
+

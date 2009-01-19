@@ -1,0 +1,7 @@
+Import('env')
+
+src = ['BoostPythonConversion.cpp']
+python_lib = env.SharedLibrary('conversion', src, SHLIBPREFIX='')
+libs = ([], python_lib)
+
+Return('libs')

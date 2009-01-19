@@ -1,0 +1,75 @@
+=================== sectional =================
+1  SEATLE
+2  GREAT FALLS
+3  
+4 
+5 
+6 
+7 
+8 
+9  KLAMATH FALLS
+10 SALT LAKE CITY
+11
+12
+13
+14
+15
+16 SAN FRANCISCO
+17 LAS VEGAS
+18
+19
+20
+21
+23
+24 LOS ANGELES
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38 HAWAIIAN ISLANDS
+
+
+====================== TAF ====================
+100             Anchorage
+101             Atlanta
+102             Baltimore-Washington
+103             Boston
+104             Charlotte
+105             Chicago
+106             Cincinnati
+107             Cleveland
+132             Colorado Springs
+108             Dallas-Ft Worth
+109             Denver
+110             Detroit
+130             Fairbanks
+111             Houston
+112             Kansas City
+113             Las Vegas
+114             Los Angeles
+115             Memphis
+116             Miami
+117             Minneapolis-St Paul
+118             New Orleans
+119             New York
+131             Orlando
+120             Philadelphia
+121             Phoenix
+122             Pittsburgh
+123             Puerto Rico-VI
+124             St Louis
+125             Salt Lake City
+126             San Diego
+127             San Francisco
+128             Seattle
+129             Tampa
+

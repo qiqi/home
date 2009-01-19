@@ -1,0 +1,46 @@
+\chapter{Conclusion and Future Work}
+
+The primary goals of this work are to develop an efficient method of solving
+the adjoint equation for unsteady fluid flow equations, and to use the adjoint
+solution to efficiently propagate uncertainties in computational fluid dynamics
+simulations.  Both goals have been achieved for incompressible
+Navier-Stokes flow simulations in complex geometry using unstructured grids.
+Two ways of efficiently solving the adjoint equation for time-dependent
+problems have been demonstrated:
+the Monte Carlo forward-time adjoint solver, and
+the dynamic checkpointing method.  We applied the dynamic checkpointing
+method in an unstructured incompressible Navier-Stokes solver, and integrated
+it into CDP, the incompressible flow solver used at the Center for Turbulence
+Research at Stanford University.
+We also developed two approaches for using the adjoint
+solution in propagating uncertainties.  One approach is using the adjoint
+sensitivity gradient to accelerate Monte Carlo methods in quantification
+of risk.  The other approach is a multi-variate interpolation scheme.
+The scheme uses the gradient information on grid points to improve accuracy.
+It works for arbitrary scattered grid points, and converges exponentially to
+the objective function.
+
+Two important areas of future work are improvements to the Monte Carlo
+adjoint solver and applications of the interpolation scheme.
+To further improve the accuracy
+of the Monte Carlo adjoint solver and reduce its cost, variance-reduction
+methods can be used on the Monte Carlo linear solver.  In addition, formulating
+the linear system on a different linear basis may significantly reduce the
+variance.  For example, we plan to formulate the adjoint equation on a Fourier
+basis and analyze its impact on the accuracy of the Monte Carlo solution.
+If we can reduce the variance of our Monte Carlo adjoint solver, we can
+apply this method to the adjoint of the Navier-Stokes equations.
+
+The second area of future work is in the application of the multi-variate
+interpolation method.  We plan to apply this method to the
+Navier-Stokes equations,
+and compare it to uncertainty quantification methods such as
+polynomial chaos and collocation methods.  In addition, we want to use
+the interpolation method to augment collocation methods.  In a collocation
+method, it is possible that one level of tensor or sparse grid is not
+sufficient to obtain accurate results, while the next grid level is too
+expensive to calculate.  In this case, one can add as many grid points as
+are affordable, and use our interpolation method to obtain the value at the
+uncalculated points in the next level grid.  Such a method could
+make collocation methods more practical when the dimensionality of the
+random space is high.

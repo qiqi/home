@@ -1,0 +1,608 @@
+\chapter{Introduction}
+
+\begin{quote} \begin{it}
+Uncertainty is the only certainty there is, and knowing how to live with
+insecurity is the only security. \end{it}
+\begin{flushright}--- John Allen Paulos\end{flushright}
+\end{quote}
+
+\section{Uncertainty quantification:
+         defining the next generation of computational simulations}
+
+Modern scientific research and engineering increasingly rely on computer
+simulations.  The inability to produce an estimate of the uncertainties in
+the calculation is an important drawback of current computer simulation
+technology \cite[]{overall}.  For example, current weather forecast
+produce only a prediction of what the weather might be in the next
+few days.  Due to the various errors made in the prediction process,
+the actual weather is notoriously likely to differ from the predicted weather
+\cite[]{weather1}.
+Another example is in computational fluid dynamics simulations for
+aircraft design.  Current CFD software can produce a performance
+profile for a proposed design, but it does not calculate how much different
+the predicted performance can be from the actual performance profile
+\cite[]{design1}.  The only
+way to be certain is to test a physical prototype in wind tunnels and in
+flight tests.
+
+In contrast, if we could rigorously quantify the uncertainties in computer
+simulations, the results can be used in risk analysis and 
+decision making.  In weather prediction, for example, we want to calculate all
+possible scenarios, and estimate their likelihood.
+Forecasting with quantified uncertainty
+enables one to make more informed decisions when
+planning weather-dependent activities \cite[]{weather3}.
+Returning to our second example above, we
+want to calculate possible differences between the actual and predicted
+performances.
+The designer can make more informed decisions based
+on the resulting uncertainty of the simulation results:
+he may choose to reduce the
+uncertainty by refining the computational model.  If the level of uncertainty
+is acceptable, the design may be improved based on insights gained from
+the simulation.  If both the level of uncertainty and the predicted design
+performance are satisfactory, the designer could finalize the design and begin
+working on a prototype.  With the ability to accurately quantify errors and
+uncertainties, computer simulations will become much
+more powerful tools in science and engineering.
+
+%This thesis proposes several related new methods of propagating uncertainties,
+%a very important part of the uncertainty quantification process.
+
+
+
+\section{Two steps in uncertainty quantification: source and propagation}
+To quantify the uncertainties in the result of a simulation, one must
+understand both the sources of these uncertainties, and how uncertainties
+propagate through the simulation.  The uncertainties in a simulation can
+originate from many sources, including
+\begin{itemize}
+\item uncertainties in initial conditions;
+\item uncertainties in boundary conditions;
+\item uncertainties in geometric parameters that describe the physical objects
+      involved in the simulation;
+\item uncertainties from mathematical models that describe physical processes;
+\end{itemize}
+In addition, numerical errors in solving the mathematical models can be
+also treated as uncertainty.  These errors include
+\begin{itemize}
+\item uncertainties in discretization errors of continuous differential
+      equations that describe a physical process;
+\item uncertainties from finite precision floating point computations;
+\item uncertainties from the residual of iterative solvers.
+\end{itemize}
+In weather forecasting, meteorologists obtain the initial condition
+by feeding the measurements from weather observation
+stations into a data assimilation algorithm \cite[]{weather4}.
+Both the measurement errors from weather stations and the data assimilation
+process introduce uncertainties into the initial conditions \cite[]{weather2}.
+In addition,
+various physical components such as turbulence, cloud formation and
+precipitation are described using inexact mathematical models.
+These models introduce
+uncertainty into the simulation.  In solving the partial differential
+equations that describe the evolution of global weather,
+current computing technology can only afford a grid spacing in the order of
+kilometers, introducing a substantial amount of discretization and subgrid-scale
+physics uncertainty into the simulation.  Finally, iterative solvers
+are often used in every time step of the partial differential equation solver.
+The residual of the iterative solver causes additional uncertainty in the
+predictions \cite[]{jameson01}.  In a simulation of flow past
+an object, uncertainties in boundary conditions can result from
+inaccurate geometrical representations.  Additional parametric uncertainties
+can result from inaccurate descriptions of the physical properties of the
+fluid \cite[]{design4}.  The main task of uncertainty quantification is defining
+and quantitatively description of these uncertainties.
+
+Several theories address the definition of uncertainty.
+These theories include probability theory \cite[]{design1} \cite[]{probability},
+fussy set theory \cite[]{fuzzy} and evidence theory \cite[]{evidence1}
+\cite[]{evidence2}.
+In this report, we work under the framework of probability theory,
+which provides a solid and comprehensive theoretical foundation and offers
+the most versatile statistical tools.
+In contrast to the traditional, deterministic simulations,
+we describe uncertainties as randomness, and model the sources
+of uncertainties as random variables, random processes and random fields.
+To quantify the sources of uncertainties, we must specify the joint probability
+density function of all these random variables, processes and fields.
+This step is usually very problem-dependent.  The methods involved in this
+step include
+statistical analysis, experimental error analysis and often expert judgment
+\cite[]{sources}.
+Although how to quantify model uncertainties and numerical uncertainties
+is still a topic of current research \cite[]{modeluq1} \cite[]{modeluq2},
+successful examples exist of quantifying the uncertainty sources for
+very complex engineering systems.
+For example, \cite{mars_entry} were very successful
+in quantifying the uncertainties in the Martian atmosphere entry of the
+NASA Phoenix spacecraft.
+
+Once the sources of uncertainties are quantified, we need to calculate how
+these uncertainties propagate through the simulation to the
+quantities of interest.  These, also known as objective functions,
+are the main quantities to be predicted.  They are functions
+of all the random variables that describe the sources of uncertainty.
+In simulating flow
+past an airplane, for example, the objective functions are the
+critical performance parameters, such as lift and drag \cite[]{overall}.
+
+In analyzing the propagation of uncertainties, we calculate how the objective
+functions are affected when the random variables describing the sources of
+uncertainties take different values \cite[]{response_sur}.
+In a complex computational simulation, some sources of uncertainties,
+although present, have only negligible influence; in contrast,
+other sources of uncertainties may have a major impact on the variation of the
+objective
+functions and significantly contribute to the prediction error of the
+simulation \cite[]{chaotic}.
+An extreme case is the well-known ``butterfly effect'' in chaotic
+nonlinear dynamical systems:
+as the famous mathematician and meteorologist Edward Norton Lorenz hypothesized,
+\begin{it}
+the flap of a butterfly's wings in Brazil could set off a tornado in Texas.
+\end{it}
+This is a vivid account for the following phenomenon: In a chaotic dynamic
+system, even a tiny amount of uncertainty in the initial
+condition can cause large deviations in its evolution.
+In fact, as uncertainties propagate through such a system, their
+magnitude often grows exponentially, until it becomes large enough to make
+simulation-based predictions completely unreliable.  In this case, 
+if the random variables describing the sources of uncertainties vary even
+slightly, they can produce a large variance
+in the objective functions \cite[]{chaotic}.
+Therefore, it is critical to quantify
+how the objective functions depend on the sources of uncertainties.
+
+The final product of the uncertainty quantification
+process is a quantitative description of the likelihood in the values of the
+quantities of interest.  It can only be obtained by combining our knowledge of
+the sources of uncertainties and the behavior of the objective functions with
+respect to these sources.
+In the probability theoretic framework, this quantitative
+description is a joint probability density function of the
+objective functions.  The support of this joint probability density function,
+i.e., the space where the function is positive, describes all possible
+scenarios predicted by the computational simulation; in addition, the value
+of the probability density function indicates how likely each scenario is.
+This joint probability density function enables
+decision making based on risk analysis, removing the important limitations of
+deterministic computational simulations.  Due to these benefits,
+we believe that uncertainty quantification will be the defining
+characteristic of the next generation of computational simulation tools.
+
+
+
+\section{Methods for propagating uncertainty}
+
+As discussed in the previous section, uncertainty quantification
+involves two steps: determination of the uncertainty sources, and
+analysis of their propagation through the simulation.
+Denoting the random variables describing the sources of uncertainties as $\xi$,
+and the objective functions as $\bf J$,
+a mathematical abstraction of this two-step process is:
+\begin{enumerate}
+\item Quantify the joint probability density function of the vector $\xi$,
+which
+includes all random variables, discretized random processes and random fields
+that are used to describe the sources of uncertainty.
+\item Given the probability density function of $\xi$, calculate the
+probability density function of $\bf J$.
+The function $\bf J$ is also called the response function or response surface.
+\end{enumerate}
+
+Our research has been focused on the second part of the uncertainty
+quantification process,
+the propagation of uncertainty from the sources of uncertainties $\xi$ to the
+objective functions
+${\bf J}$.  There have been extensive studies in this aspect of uncertainty
+quantification in the past few years.  The common approaches are
+Monte Carlo methods \cite[]{mars_entry}, the polynomial chaos method
+\cite[]{poly_chaos}, collocation-based methods \cite[]{collocation}, and
+sensitivity-based methods \cite[]{sensitivity1}.
+
+\subsection{Monte Carlo methods}
+In Monte Carlo methods, a sequence
+$\xi_1, \xi_2, \ldots, \xi_n$ is sampled according to the probability
+distribution of $\xi$, which is obtained from the first step of uncertainty
+quantification.  Deterministic simulations are performed for each sampled
+$\xi_i$ to obtain the objective function ${\bf J}(\xi_i)$.
+The empirical density function is obtained by plotting the histogram
+of the objective functions.
+As the number of samples increases, this empirical density function
+converges to the probability density function of the objective functions.
+In reality, we can perform simulations on a finite number of
+samples; the resulting empirical density function is used as an estimate
+of the probability density function \cite[]{monte1}.
+
+There are several advantages of
+Monte Carlo methods.  First, implementing Monte Carlo methods is generally
+simple once a deterministic solver is available.  The implementation only
+involves a sampling method for $\xi$, the execution of the deterministic
+solver for calculating $\bf J$, and the collection of statistics
+from the resulting samples of $\bf J$.
+Second, Monte Carlo methods are naturally insensitive to the dimensionality
+of the parameter space, and does not have the ``curse of dimensionality''.
+Third, because the deterministic solver can be run on different
+processors for different samples $\xi_i$, Monte Carlo methods are inherently
+parallel.  By using a Monte Carlo method, we can take full advantage of a
+parallel computer even if the
+deterministic solver runs only on a single processor.  In addition,
+Monte Carlo methods are generally very robust, due to their simplicity.
+They usually work whenever the underlying deterministic solver works.
+
+On the other hand, the major drawback of Monte Carlo methods
+is their slow rate of convergence.  Although there are many techniques to
+increase its rate of convergence, such as variance-reduction methods using
+control variates and importance sampling techniques,
+the ultimate rate of convergence
+of all Monte Carlo methods is governed by the central limit theorem,
+and is of the order of $n^{\frac12}$ (where $n$ is the number of samples)
+without exception.
+The implication of this slow convergence is high computational cost, and
+relatively large approximation error of the empirical density function
+of $\bf J$.
+Due to this limitation, Monte Carlo is only suitable when the desired accuracy
+is not very high; for example, when the result of the first step of
+uncertainty quantification, the probability distribution of the sources of
+uncertainties, is not very accurate.  Since the inaccurate quantification
+of the uncertainty sources dominates the error in the quantified uncertainty,
+calculating the propagation
+of uncertainty with high precision would not be prudent.
+In this situation, Monte Carlo can be the method of choice.
+However, if the sources of uncertainties can be accurately quantified, and
+an accurate probability distribution of the objective functions is desirable,
+using Monte Carlo methods can be very costly in terms of computational
+resources \cite[]{Rubinstein1981} \cite[]{monte3}.
+
+\subsection{Intrusive polynomial chaos}
+In contrast to slow-converging Monte Carlo
+methods, polynomial-chaos-based methods are theoretically proven to converge
+exponentially fast for smooth objective functions \cite[]{poly_chaos}.
+This method chooses a set of orthogonal multi-variate
+polynomials $\{ \Phi_i(\xi) \;|\; i \in {\mathbb N}^d \}$ as an infinite
+dimensional basis in the random space, with $d$ as the number of components
+of $\xi$, and $i=(i_1,\ldots,i_d)$.
+With this basis, each random variable
+in the computational simulation is represented using an infinite series
+known as polynomial chaos expansion.  In a time-dependent partial differential
+equation, the solution can be represented as
+\[ u(x, t; \xi) = \sum_{i \in {\mathbb N}^d} u_i(x, t)\,\Phi_i(\xi) , \]
+where each $u_i$ is deterministic.  In computation, a truncated series is used
+\begin{equation} \label{truncatedpcseries}
+  u(x, t; \xi) \approx \sum_{\substack{i \in {\mathbb N}^d\\|i|\le P}}
+   u_i(x, t)\,\Phi_i(\xi) ,
+\end{equation}
+where $P$ is the order of the expansion.  Using a Galerkin projection in
+the random space, a set of coupled partial differential equations governing
+the evolution of $u_i(x,t)$ can be derived from the partial differential
+equation governing the evolution of $u(x,t;\xi)$.  These coupled partial
+differential equations are then solved to obtain each $u_i(x,t)$.
+Using similar Galerkin projections, the objective function can also be
+approximated using truncated polynomial chaos expansions
+\[ {\bf J}(\xi) \approx \sum_{\substack{i \in {\mathbb N}^d\\|i|\le P}}
+   {\bf J}_i\,\Phi_i(\xi) , \]
+and the coefficients ${\bf J}_i$ can be calculated from $u_i(x,t)$.
+This expansion of the objective functions and its coefficients is the
+final product of the polynomial chaos analysis \cite[]{polychaos2}.
+Many important statistics
+of the objective functions, such as mean and variance, can be analytically
+calculated from this expansion.  More complex statistics can be calculated
+by sampling the response surface defined by (\ref{truncatedpcseries}),
+a process that is very fast because (\ref{truncatedpcseries}) is easy
+to evaluate.
+
+Under certain conditions, the error of the truncated series expansion is
+proven to decrease exponentially fast with respect to the polynomial order $P$.
+Experimentally, intrusive polynomial chaos method has been shown to be by far
+superior to Monte Carlo methods, especially on relatively simple problems.
+When the required precision is high, polynomial chaos can dramatically
+reduce the required computational effort \cite[]{polychaos3}.
+
+In more complex problems,
+however, polynomial chaos methods have two major limitations.  The first
+is the infamous ``curse of dimensionality''.  
+For a polynomial chaos expansion truncated at order $P$, the number of terms
+in the expansion is $\dfrac{(P+d)!}{P!\:d!}$.  The cost of solving the
+polynomial chaos system grows at least proportionally to the number of terms in
+the truncated polynomial chaos expansion \cite[]{polychaos4}.
+As a result, for the polynomial
+order $P$, the cost of the polynomial chaos method
+grows very fast, often exponentially with respect to $d$, the dimensionality
+of the random space.  In complex problems, this dimensionality 
+may be hundreds or even thousands, making polynomial chaos method with $P>2$
+totally infeasible.  This limitation makes its advantage, the exponential
+convergence with respect to $P$, irrelevant in these practical applications.
+
+The second limitation is due to the intrusiveness of this method
+\cite[]{polychaos5}.
+In intrusive polynomial chaos methods, the original equation governing the
+evolution of $u(x,t;\xi)$ is transformed into a set of coupled
+equations that govern the evolution of the coefficients of the truncated
+polynomial chaos expansion $u_i(x,t)$.  These new equations often have
+different characteristics than the original equation, and can be much more
+complicated.  As a result, using the intrusive polynomial chaos method requires
+writing a new solver.  For complex engineering problems, this involves a very
+large amount of coding work.  In addition, if the new equations are not
+discretized properly, numerical instabilities may occur \cite[]{polychaos6}.
+This consideration
+makes additional work in numerical analysis necessary before writing the new
+solver.  These two barriers limit the application of intrusive polynomial
+chaos to complex problems with many degrees of uncertainty.
+
+\subsection{Collocation-based methods}
+Collocation-based methods are designed to remove the second
+limitation of intrusive polynomial chaos methods \cite[]{collocation}.
+According to the
+probability distribution of random variables $\xi$ describing the sources of
+uncertainty, collocation methods select a
+multi-dimensional grid $\xi_1,\ldots,\xi_Q$.  Commonly used grid types include
+tensor product grids and Smolyak sparse grids constructed as combinations
+of 1-D grids, such as Gauss quadrature grid or Clenshaw--Curtis grid
+\cite[]{collocation2}.  A deterministic
+solver is used to calculate the objective function ${\bf J}(\xi_i)$
+for each point on
+the multi-dimensional grid.  Using quadrature methods on the
+multidimensional grid, many statistics of the objective function can be
+directly computed from its values on the grid.
+Alternatively, one can represent the objective function using a polynomial
+chaos expansion, whose coefficients can be computed using similar quadrature
+methods.  This approach is commonly referred to as non-intrusive polynomial
+chaos method \cite[]{polychaos5}.
+
+The main advantages of collocation methods are exponential convergence
+and non-intrusiveness \cite[]{collocation1}.
+Similar to the polynomial chaos, the error of
+collocation-based methods decreases exponentially as the order in
+each dimension (if a tensor product grid is used) or the total order (if
+a sparse grid is used) increases.  In addition, like Monte Carlo methods,
+collocation methods solve a deterministic problem at each grid point.
+If a deterministic solver is available, collocation methods do not
+modify its source code, and do not require developing a new solver.
+Therefore, using the non-intrusive collocation methods saves significant
+effort in software engineering and coding.
+
+Despite these benefits,
+collocation methods suffer from the same curse of dimensionality as intrusive
+polynomial chaos does.  In fact, compared to intrusive polynomial chaos,
+the computational cost tends to grow even faster with respect to the
+dimensionality of the random space.  The Smolyak sparse grid is designed
+to alleviate this problem, but the growth of cost with respect to
+dimensionality is still at least as fast as intrusive polynomial chaos
+\cite[]{collocation2}.
+This curse of dimensionality limits both
+polynomial chaos and collocation-based methods to relatively simple problems
+in which only a small number of uncertainty sources are considered.
+
+\subsection{Sensitivity-based methods}
+
+Sensitivity-based methods are a class of uncertainty propagation methods that
+use the derivatives of the objective function with respect to the random
+variables describing the sources of uncertainty,
+i.e., the sensitivity derivative, $\dfrac{\partial {\bf J}}{\partial \xi}$.
+Adjoint-based methods, which are the primary focus of this work, is a subclass
+of sensitivity-based methods.
+The sensitivity derivative can be calculated using three
+methods: finite differences,
+tangent linear analysis, and adjoint analysis \cite[]{dakota}.
+In finite difference method,
+the objective function at two nearby points in the random space ${\bf J}(\xi_0)$
+and ${\bf J}(\xi_0+\Delta \xi)$ are calculated using deterministic solvers.
+The difference between the values of the objective function is used to
+approximate its derivative.  In order to get the
+full gradient, at least $d+1$ deterministic calculations must be performed.
+The finite difference method is easy to implement and non-intrusive, but may
+produce inaccurate derivatives.
+
+In contrast, the tangent linear method
+derives a linear equation that governs the evolution of the sensitivity.
+By solving this tangent linear equation, the exact derivatives of the objective
+function can be calculated.  Similar to the finite difference method, at
+least $d$ instances of the tangent linear equation must be solved with
+different initial conditions in order to obtain the full gradient.
+
+The adjoint method also computes the exact gradient.  In this method, the
+adjoint linear equation is solved instead of the tangent linear equation.
+The number of adjoint equations that must be solved to obtain the full gradient
+equals to the number of objective functions, but is independent of $d$, the
+dimensionality of the random space.  In complex problems, the number of
+objective functions is often much smaller than the dimensionality of the
+random space.  As a result, the adjoint method can be much more efficient
+than the other two.  Accordingly, in this work, we focus on adjoint-based
+methods.
+
+Sensitivity-based methods are best known for their efficiency in terms of
+computational resources \cite[]{dakota}.
+There are several approaches that use the gradient
+$\dfrac{\partial f}{\partial x}$ to analyze the propagation of uncertainty.
+Each method has its own benefits and limitations.
+The perturbation method approximates the objective function using
+a first- or second-order truncated Taylor series, which can be constructed from
+the derivatives.
+The probability distribution of the objective function is approximated by
+the probability distribution of its low-order approximation, which can be
+directly calculated from the probability distribution of the sources of
+uncertainties \cite[]{sensitivity1}.  This methods is simple and efficient,
+but is limited to the cases when the magnitudes of uncertainties are
+sufficiently small.
+When large magnitude of uncertainty is present, the first-order truncated
+Taylor series is not a valid representation of the objective function.
+In this case, the linear perturbation method must be combined with other
+methods, such as collocation methods, in order to produce accurate results.
+Another method that uses the sensitivity
+derivative is commonly referred to as a two-step hybrid approach.
+In the first step of this method, the sensitivity derivative is calculated,
+and is used to determine which uncertain parameters have significant impact
+on the objective function.  In the second step, the uncertain parameters
+that are considered insignificant are discarded, reducing the dimensionality
+of the random space.  A Monte Carlo, polynomial chaos or collocation method
+is then used on the reduced random space \cite[]{mars_entry}.
+This approach is most suitable
+when the dimension of the random space is large, and the magnitude of
+uncertainty is large only for a small number of random parameters.
+
+In addition to these two methods, we propose two new uncertainty propagation
+methods using the sensitivity gradient.  The adjoint accelerated Monte Carlo
+is suitable for estimating the tail probabilities.  The adjoint-based
+interpolation is an efficient and accurate method of capturing the nonlinearity
+in the propagation of uncertainties.
+By replacing the objective function with this interpolation approximation,
+this method can be combined with most uncertainty propagation
+methods to efficiently obtain accurate results.
+
+
+
+\section{Propagating uncertainty in unsteady fluid flow using
+         the adjoint method}
+
+This report focuses on propagating uncertainty in unsteady fluid dynamics
+problems using sensitivity gradient calculated by solving the adjoint equation.
+We address two main problems:
+\begin{enumerate}
+\item How to solve the adjoint equation for unsteady fluid flow.
+\item How to use the sensitivity gradient obtained from the adjoint solution
+      for propagation of uncertainty.
+\end{enumerate}
+
+\subsection{Solving the adjoint equation for unsteady fluid flow}
+\label{s:intro1}
+
+Unsteady fluid flows are described with time-dependent partial
+differential equations, the Navier-Stokes equations.
+For unsteady problems, the adjoint equation is a partial differential
+equation that has a similar structure as the primal equation;
+the major differences are:
+\begin{enumerate}
+\item The adjoint equation is a linear partial differential equation, while
+      the primal equation (such as the Navier-Stokes equations) is usually
+      nonlinear.  This linearity can make the adjoint equation easier to solve
+      than its primal equation.
+\item When the primal equation is nonlinear, the coefficients in the adjoint
+      equation depend on the solution of its primal solution.
+      Thus, the solution of the primal equation is required
+      before the adjoint equation can be solved.
+\item The adjoint equation is marched backward in time.  When the adjoint
+      equation is derived for time-dependent problems, the calculations start
+      from the terminal solution rather than an initial condition.
+      In order to calculate the sensitivity derivatives, the adjoint solution
+      must be computed
+      at each time step.  Therefore, in solving the adjoint equation, we
+      usually start at the very last time step, at which the terminal condition
+      is given.
+\end{enumerate}
+
+The second and third characteristics combine to pose a unique challenge for
+efficient solution of unsteady adjoint equations.  The adjoint
+solution process marches backward, and the solution at each time step requires
+the solution of the primal equation at the same time step.  Therefore, the
+solution of the primal equation is needed in a time-reverse order,
+which leads to a serious demand on computer memory \cite[]{griewank00}.
+
+We present two solutions to this problem.  The first solution is
+changing the time-reversed nature of the adjoint solution process.  By using
+a Monte Carlo linear solver \cite[]{Srinivasan2003} \cite[]{Okten2005},
+the adjoint equation can be solved forward in
+time.  Using this method, the adjoint equation at each step can be obtained
+immediately after solving the primal equation at the same step.
+The solution
+of the primal equation at previous time steps can then be discarded.
+We demonstrated this method for the scalar transport partial differential
+equation, though more issues remain to be resolved for systems of coupled
+partial differential equations such as the Navier-Stokes equations.
+
+The second solution is using a dynamic checkpointing method
+\cite[]{charpentier2001}.  The basic idea
+of checkpointing methods is to solve the entire primal equation first, and
+store its solution at selected time steps called checkpoints.
+When the adjoint
+equation is integrated backward in time, the solutions at corresponding
+time steps are
+calculated by re-solving the primal equation starting from the nearest
+checkpoint \cite[]{griewank00}.
+The dynamic checkpoint scheme described in this work is
+for situations when the number of time steps is not known in advance.
+It minimizes
+the maximum number of recalculations for each time step, and guarantees an
+efficient calculation of the adjoint equation when memory storage is limited.
+In contrast to previous online checkpointing methods \cite[]{heuveline2006}
+\cite[]{andrea08} \cite[]{hinze2005}, our scheme has provable performance bounds
+and works for arbitrarily large number of time steps.
+
+Based on our checkpointing scheme, we have developed an adjoint solver for the
+unsteady incompressible Navier-Stokes equations.
+The adjoint equation for unsteady Navier-Stokes equations has been
+derived and is solved in short time horizon for flow control purposes
+\cite[]{bewley01} \cite[]{adjoint1}.
+Because the dynamic checkpointing technique is used, the
+adjoint solver we have developed is suitable for long time integration.
+We solve the unsteady adjoint Navier-Stokes equations on unstructured mesh,
+making it suitable for studying a large variety of fluid flows in complex
+geometries.
+
+\subsection{The advantages of using adjoint solution for propagating
+uncertainties} \label{s:intro2}
+
+The main advantage of using the adjoint solution is that it is a very cost
+effective way of obtaining information about the objective function.
+The entire gradient $\nabla {\bf J}$ of each objective function with respect to
+all components of $\xi$ can be calculated by solving a single adjoint equation
+\cite[]{adjoint2}.
+When the dimension of $\xi$ is large, i.e., when a large number of random
+variables are needed to describe the sources of
+uncertainty, the gradient of $\bf J$ reveals much more information about
+$\bf J$ and its statistics than the value of $\bf J$.  For example, consider a
+single objective function, with the dimension of $\xi$ equal to 1000, evaluating
+the value of $\bf J$ at a single point produces only one number,
+${\bf J}(\xi)$ at that
+point.  However, if the gradient of $\bf J$ can be calculated at the same point,
+we obtain 1000 numbers indicating the variability of $\bf J$ along each
+dimension of $\xi$.
+Moreover, if the gradient can be computed with less than 1000 times the
+computational
+cost of computing the function value, and the information from the gradient
+can be fully utilized in calculating the statistics of the objective function,
+then computing the gradient at each point would be a more efficient way to
+calculate statistical information of the objective function \cite[]{dakota}.
+Accordingly, in this work, we have developed two methods of using the adjoint
+sensitivity gradient in propagating uncertainties.
+
+The first method is the accelerated Monte Carlo method presented in
+Chapter 5.  It is designed
+to calculate tail probabilities for risk analysis.  By using control variate
+and importance sampling techniques based on the adjoint sensitivity gradient,
+we can concentrate the samples around the tail of the probability.
+This reduces the variance of Monte Carlo methods and accelerates their
+convergence.
+
+The second method is an adjoint-based multi-variate interpolation method.
+In this method, we approximate the objective function ${\bf J}(\xi)$ with an
+interpolant ${\tilde f}(\xi)$, which is constructed from the value and
+gradient of the objective function at a finite number of points.
+The interpolation grid can be arbitrary, and the error of the interpolation
+approximation decreases exponentially as more points are used.
+The statistics and density function of the objective
+functions are then approximated as the statistics and density function of the
+surrogate objective functions $\tilde f$, which can be calculated efficiently
+using a Monte Carlo method.  Because the adjoint gradient is used, this
+method is efficient; because the choice of the interpolation grid is arbitrary,
+this method is also flexible. This method is also accurate
+due to the spectral convergence of the interpolation scheme.
+
+\section{Accomplishments}
+\begin{itemize}
+\item Developed a Monte Carlo adjoint solver, the first unsteady adjoint solver
+      that runs forward in time.
+\item Developed the dynamic checkpointing scheme, the first optimal
+      checkpointing scheme that works for an arbitrary number of time steps,
+      and with proven bounds on its performance.
+\item Developed an adjoint solver for CDP, the first long time integration
+      adjoint solver for hybrid unstructured mesh,
+      unsteady Navier-Stokes solver.
+\item Developed a method that can dramatically accelerate Monte Carlo
+      convergence for risk analysis.
+\item Invented an interpolation scheme that converges exponentially fast
+      and works on arbitrary grids.  It is also the first multi-variate
+      interpolation scheme for arbitrary scattered data and matches the
+      gradient at interpolation nodes.
+\end{itemize}
+

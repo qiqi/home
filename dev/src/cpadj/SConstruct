@@ -1,0 +1,9 @@
+Import('env')
+
+src = ['CpadjPde.cpp', 'CpadjBurgers.cpp', \
+       'CpadjBoostPython.cpp']
+static_lib = env.StaticLibrary('cpadj', src)
+python_lib = env.SharedLibrary('cpadj', src, SHLIBPREFIX='')
+libs = (static_lib, python_lib)
+
+Return('libs')

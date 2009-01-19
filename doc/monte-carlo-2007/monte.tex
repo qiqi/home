@@ -1,0 +1,1576 @@
+\documentclass[a4paper,11pt]{article}
+
+    \usepackage{amsfonts}
+    \usepackage{amsmath}
+    \usepackage{amssymb}
+    \usepackage{amsthm}
+    \usepackage{color}
+    \usepackage{enumerate}
+    \usepackage{epsfig}
+    \usepackage{graphicx}
+    \usepackage{setspace}
+    \usepackage{subfigure}
+    \usepackage{vmargin}
+
+
+
+    \setcounter{MaxMatrixCols}{30}
+    \oddsidemargin=1.0in
+    \evensidemargin=1.0in
+    \textwidth=6.5in
+    \textheight=9.5in
+    \headheight=0.0in
+    \topmargin=0.8in
+
+
+    
+    \newtheorem{theorem}{Theorem}[section]
+    \newtheorem{lemma}[theorem]{Lemma}
+    \newtheorem{proposition}[theorem]{Proposition}
+    \newtheorem{corollary}[theorem]{Corollary}
+    
+    \theoremstyle{remark}
+    \newtheorem{remark}[theorem]{Remark}
+    
+    \theoremstyle{definition}
+    \newtheorem{definition}[theorem]{Definition}
+
+
+    
+    \renewcommand{\labelenumii}{(\arabic{enumii})}
+    
+    % \doublespacing
+
+
+
+    \bibliographystyle{plain}
+
+
+
+\title{A Monte Carlo Method for Solving Unsteady Adjoint Equations}
+
+\author{Qiqi Wang, David Gleich, Amin Saberi, Nasrollah Etemadi, Parviz Moin}
+
+\date{}
+
+
+
+\begin{document} \maketitle
+
+
+
+\abstract{
+    Traditionally, solving the adjoint equation for unsteady problems involves
+    solving a large, structured linear system.  This paper presents a variation
+    on this technique and uses a Monte Carlo linear solver.  The Monte Carlo
+    solver yields a forward-time algorithm for solving unsteady adjoint
+    equations.  When applied to computing the adjoint associated with Burgers'
+    equation, the Monte Carlo approach is faster for a large class of problems
+    while preserving sufficient accuracy.
+}
+
+
+
+
+
+\section*{Introduction}
+    Adjoint based methods are widely used tools for analyzing and
+    controlling the behavior of many systems.  In these methods, one models a
+    system as an algebraic or differential equation, then the adjoint equation
+    of the original problem is derived, and finally both equations are solve.
+    From the solution of the adjoint equation, the derivative of an objective
+    function is calculated with respect to a set of control parameters.  Often
+    this procedure is called backward algorithmic (automatic) differentiation
+    \cite{Griewank2003}.  Adjoint based methods solve a large class of
+    optimization problems, inverse problems and control problems
+    \cite{Bewley2001,Choi1993,Giles2000,Gunzburger1999,Gunzburger2000,
+    Jameson1988}.
+    
+    Another important application of adjoint based methods is posterior
+    error estimation.  In this context, these methods are often called
+    duality based methods \cite{Pierce2002,Giles2002,Hoffman2004}. 
+    They are particularly useful when the original problem is a 
+    discretized partial differential equation.  When the numerical error
+    caused by the discretization is high, we can apply automatic adaptive mesh
+    refinement \cite{Hoffman2005} based on the adjoint solution to
+    reduce the numerical error at a fixed computational cost.
+    
+    Although adjoint based methods have a long history in computational sciences
+    and engineering \cite{Bryson1969}, computing the solution
+    solution of an adjoint equation is difficult: when the original 
+    problem is a time dependent (unsteady) problem, solving its adjoint
+    equation is a backward-time procedure, and requires the full
+    \emph{trajectory} to be stored in memory.  The trajectory is formed
+    by the solution of the original problem at all time steps, and is 
+    often too large to store in memory.  In \cite{Griewank1992}, Griewank
+    proposed a very interesting iterative checkpointing scheme called
+    \emph{Revolve} for dealing with this problem.  In his scheme, storing the
+    full trajectory is
+    avoided by iteratively solving the original problem.  This idea made 
+    solving adjoint equations possible for larger unsteady problems.
+    Since then, a number of similar schemes have been proposed
+    \cite{Charpentier2001,Griewank2004}.  Nevertheless, all of these
+    schemes are significantly more expensive than solving the original 
+    problem in terms of both memory requirements and computational time.
+    As a result, if the original problem is very large in terms of the number
+    of degrees of freedom, solving the adjoint equation is still prohibitively
+    expensive.
+    
+    In this paper, we propose a new method for solving the adjoint
+    equation for unsteady problems.  Instead of computing an exact
+    solution, we use a Monte Carlo method to approximate the solution.
+    This method samples Markovian random walks in the space-time 
+    structure of the original problem and estimates quantities of
+    interest from these samples.  The method builds upon Monte Carlo
+    linear solvers for general linear systems \cite{Forsythe1950,Dimov1998,
+    Tan2002,Okten2005} and some related works \cite{Hanrahan2000}. 
+    We found that the Monte Carlo method is particularly
+    suitable for solving unsteady adjoint equations.  \emph{In contrast to
+    traditional methods used for solving the adjoint equation, this method is
+    a forward-time procedure.}  Amazingly, neither storing the trajectory 
+    nor iteratively solving the original problem is required.  Therefore,
+    the memory requirement and computational time of our Monte Carlo method
+    are a constant multiples of the original problem (as opposed to exact
+    solution methods where these requirements are $\log m$ times larger, where
+    $m$ is the number of time steps.)
+    
+    In the remainder of this paper, section 1 introduces the unsteady adjoint
+    equation.  Section 2 describes the traditional exact solution methods.  In
+    section 3, we introduce our Monte Carlo method for solving adjoint
+    equations.  Because many large problems arise from discretized partial
+    differential equations, we describe our method specifically for this case.
+    The error and variance of this method is analyzed in section 4.  In
+    section 5, we show the results of several numerical experiments with
+    Burgers' equation.
+
+
+
+
+
+\section{The Unsteady Adjoint Equation}
+    Consider a state vector $u$ controlled by a control vector $\eta$
+    via constraint or governing equation $\mathcal{R}$.  The objective function
+    $\mathcal{F}$ is defined on the space of $u$ and $\eta$.  We denote this by
+    \begin{equation} \label{sys} \left\{ \begin{aligned}
+        & \mathcal{F}(u,\eta) \\
+        & \mathcal{R}(u,\eta) = 0 ,
+    \end{aligned} \right. \end{equation}
+    where $\mathcal{F}$ is a scalar function, and $\mathcal{R}$ is a
+    vector function with $dim(\mathcal{R}) = dim(u)$.  In the context of
+    an adjoint equation, system (\ref{sys}) is often referred as the
+    \emph{original problem}.
+    
+    Many engineering applications fit this problem type.  Generally,
+    $\mathcal{R}$ is an algebraic or differential equation modeling a
+    physical system, $u$ is a vector describing the state of the system,
+    and $\eta$ is a vector composed of a set of control parameters.  In
+    the context of computational fluid dynamics, most problems concern
+    objects in a flow field.  In these problems, the constraint
+    $\mathcal{R}$, the Navier-Stokes equation, controls the flow field
+    $u$.  We are often interested in objective functions such as
+    the lift, drag and other forces, which are possible candidates for
+    $\mathcal{F}$.  The control parameters might be the geometry of the
+    object itself or perturbations to the boundary conditions.
+    
+    The \emph{adjoint equation} of the system (\ref{sys}) is defined as the
+    linear system
+    \begin{equation} \label{adj}
+          \left( \frac{\partial\mathcal{R}}{\partial u} \right)^T \psi
+        = \left( \frac{\partial\mathcal{F}}{\partial u} \right)^T ,
+    \end{equation}
+    where $\left( \frac{\partial\mathcal{R}}{\partial u} \right)^T$ is the
+    constraint Jacobian.  and $\psi$ is the adjoint solution.
+    
+    The adjoint equation is widely used in analyzing and
+    controlling the system (\ref{sys}).  For example, many
+    optimization problems, inverse problems and control problems require
+    computing the derivative of the objective function with respect to
+    the control parameters of the original problem (\ref{sys}),
+    \[ \frac{d\mathcal{F}(u(\eta),\eta)}{d\eta}
+        = \frac{\partial \mathcal{F}}{\partial \eta} +
+          \frac{\partial \mathcal{F}}{\partial u} \: \frac{d u(\eta)}{d \eta},
+    \]
+    where $u(\eta)$ is an implicit function defined by $\mathcal{R}$, and its
+    derivative
+    $\frac{d u(\eta)}{d \eta}$ can be obtained from
+    \[ 0 = \frac{d\mathcal{R}(u(\eta),\eta)}{d\eta}
+         = \frac{\partial \mathcal{R}}{\partial \eta} +
+           \frac{\partial \mathcal{R}}{\partial u} \: \frac{d u(\eta)}{d \eta}.
+    \]
+    Therefore, with some manipulation of the adjoint equation (\ref{adj}),
+    we get
+    \begin{equation}\label{impder} \begin{split}
+        \frac{d\mathcal{F}(u(\eta),\eta)}{d\eta}
+        &= \frac{\partial \mathcal{F}}{\partial \eta} -
+           \frac{\partial \mathcal{F}}{\partial u} \:
+           \left( \frac{\partial \mathcal{R}}{\partial \eta} \right)^{-1}
+           \frac{\partial \mathcal{R}}{\partial \eta} \\
+        &= \frac{\partial \mathcal{F}}{\partial \eta} -
+           \psi^T \frac{\partial \mathcal{R}}{\partial \eta} ,
+    \end{split} \end{equation}
+    which is a linear function of the adjoint solution.
+    
+    In this paper, we focus on the case when the original problem (\ref{sys}) is
+    an unsteady problem; e.g. when the constraint $\mathcal{R}$ is a time
+    dependent partial differential equation.  In this case, we can order the
+    elements of the state vector and the constraint by time steps.
+    i.e.
+    \[ u = \left( u^{(1)}, \ldots, u^{(m)} \right)^T  \qquad
+           \mathcal{R} = \left( \mathcal{R}^{(1)}, \ldots,
+                                \mathcal{R}^{(m)} \right)^T
+    \]
+    where $m$ is the number of time steps, $u^{(i)}$ and $\mathcal{R}^{(i)}$ are
+    the state vector and the constraint at time step $i$.  With this ordering,
+    the matrix $\left( \frac{\partial\mathcal{R}}{\partial u} \right)^T$
+    in the unsteady adjoint equation (\ref{adj}) is well structured.  This is
+    because for unsteady problems, $\mathcal{R}^{(i)}$ only depends on the part
+    of $u$ up to time step $i$.  In other words, a block of the constraint
+    Jacobian $J_{i j} \ne 0$ only if $j\le i$.  As a result, the Jacobian matrix
+    $\frac{\partial \mathcal{R}}{\partial u}$
+    is in block-lower-triangular form.
+    \begin{equation} \label{lower}
+        \frac{\partial \mathcal{R}}{\partial u} =
+        \begin{bmatrix}
+            J_{1\,1} &          &            & \\
+            J_{2\,1} & J_{2\,2} &            & \\
+            \ddots   & \ddots   & \ddots     & \\
+            J_{m\,1} & \ddots   & J_{m\,m-1} & J_{m\,m}
+        \end{bmatrix}
+    \end{equation}
+    where each block describes the spatial dependence of the constraint.
+    \[ J_{t s} =
+        \left( \frac{\partial \mathcal{R}^{(t)}}{\partial u^{(s)}} \right).
+    \]
+    The adjoint equation (\ref{adj}) now becomes
+    \begin{equation} \label{uadj}
+        \begin{bmatrix}
+        J_{1\,1}^T & J_{2\,1}^T & \ddots     & J_{m\,1}^T   \\
+                   & J_{2\,2}^T & \ddots     & \ddots       \\
+                   &            & \ddots     & \ddots       \\
+                   &            &            & J_{m\,m}^T
+        \end{bmatrix}
+        \begin{bmatrix}
+            \psi^{(1)} \\ \psi^{(2)} \\ \vdots \\ \psi^{(m)}
+        \end{bmatrix}
+        = \begin{bmatrix} b^{(1)} \\ b^{(2)} \\ \vdots \\ b^{(m)} \end{bmatrix},
+    \end{equation}
+    where,
+    \[ b^{(t)} =
+        \left( \frac{\partial \mathcal{F}}{\partial u^{(t)}} \right)^T.
+    \]
+    In this representation, the adjoint solution $\psi$ is split into $m$ parts.
+    We call $\psi^{(t)}$ the adjoint solution at time step $t$.
+    
+    Moreover, if $\mathcal{R}$ comes from a discretized unsteady
+    differential equations, the Jacobian matrix is also block-banded.  In
+    this case, $\mathcal{R}^{(t)}$ only depends on the part of $u$ that
+    is in a neighborhood of time step $t$, and $J_{t s} \ne 0$ only if
+    $s$ is in a neighborhood of $t$.  Hence the Jacobian matrix has a
+    block-bandwidth that depends on the temporal discretization scheme.
+    For example, if the original problem uses a one-step scheme,
+    $\mathcal{R}^{(t)}$ depends only on $u^{(t)}$ and $u^{(t-1)}$.  In
+    this case, the block-bandwidth is two.  If it is a two-step scheme,
+    then the block-bandwidth is three, etc.  In particular, if the
+    differential equation is discretized using an explicit scheme, then
+    $ \mathcal{R}^{(t)} = u^{(t)} - f(u^{(t-1)},\ldots) ,$
+    and the diagonal blocks of the Jacobian are identity matrices
+    $$ J_{t\,t} =
+        \left( \frac{\partial \mathcal{R}^{(t)}}{\partial u^{(t)}} \right) = I.
+    $$
+    Note that in this case, the entire Jacobian matrix is
+    lower-triangular instead of just block-lower-triangular.
+    
+    In addition to the fixed block-bandwidth, each block of the Jacobian matrix
+    is sparse when the original problem is a discretized partial differential
+    equation.   This fact follows because in most spatial discretization
+    schemes, the constraint $\mathcal{R}$ at a mesh-point only depends on
+    its neighboring mesh-points. Denote
+    \[ u^{(t)} = \left( u_1^{(t)}, \ldots, u_n^{(t)} \right)^T  \qquad
+        \mathcal{R}^{(t)} = \left( \mathcal{R}_1^{(t)}, \ldots,
+        \mathcal{R}_n^{(t)} \right)^T,
+    \]
+    where $\mathcal{R}_i^{(t)}$ and $u_i^{(t)}$ are the constraint residue and
+    state variable at mesh-point $i$ and time step $t$.  Then
+    $\frac{\partial \mathcal{R}_i^{(t)}}{\partial u_j^{(s)}}$ is nonzero only
+    if $j$ is a neighbor mesh-point of $i$.  Therefore, each block of the
+    constraint Jacobian
+    \[ J_{t s} =
+        \begin{bmatrix}
+            \frac{\partial \mathcal{R}_1^{(t)}}{\partial u_1^{(s)}} & \ldots &
+                \frac{\partial \mathcal{R}_1^{(t)}}{\partial u_n^{(s)}} \\
+            \vdots & & \vdots \\
+            \frac{\partial \mathcal{R}_n^{(t)}}{\partial u_1^{(s)}} & \ldots &
+                \frac{\partial \mathcal{R}_n^{(t)}}{\partial u_n^{(s)}}
+        \end{bmatrix}
+    \]
+    is an $n$ by $n$ sparse matrix, where $n$ is the number of grid points
+    in space.
+    
+    Thus far, we have studied the adjoint as the solution of a linear
+    system -- a well structured sparse system if the original problem is
+    a discretized PDE in space and time.  One thing that distinguishes the
+    unsteady adjoint equation from other linear systems is its huge size.
+    In an unsteady PDE, the size of the adjoint linear system is
+    $N = n \cdot m$.  Where $n$ is proportional to the number of spatial
+    mesh points (up to billions), and $m$ is the number of time steps
+    (tens of thousands).  For many recently attempted computational fluid
+    dynamic problems, the size of the adjoint equation is tens of trillions.
+    As a result, solving adjoint equations requires different strategies
+    and techniques than solving general linear systems.
+    
+    One direct consequence of such a huge size is the unavailability of
+    required memory to store the entire linear system.  Therefore, it is
+    necessary to use a piece by piece approach to solve the adjoint equation.
+    In other words, the solution of the adjoint equation must be computed one
+    piece at a time, based on the information of the adjoint equation
+    given one piece at a time.  For this reason, the matrix ordering is a key
+    consideration in developing an algorithm for solving unsteady adjoint
+    equations.  Another consideration is how the adjoint solution will be
+    used.  Often applications only need part of the solution, or a linear
+    function of the solution.  Algorithms that directly compute these
+    final quantities without commuting the full solution should be
+    computationally economical.  Note that in this case, we generalize the term
+    ``\emph{solving adjoint equation}'' to computing linear functions of the
+    adjoint solution without computing the full solution.
+
+
+
+
+
+\section{Exact Solution of Adjoint Equations}
+    The structure of the adjoint equation, as shown in equation
+    (\ref{uadj}), makes the piece by piece strategy possible.  One
+    approach is to utilize its block-lower-triangular structure and
+    solve using block-back-substitution.  In the block-back-substitution,
+    we first solve for $\psi^{(m)}$, then solve for $\psi^{(m-1)}$, and
+    finally solve for $\psi^{(1)}$.  This approach for solving the exact
+    solution of unsteady adjoint equation is consistent with the
+    algorithm of backward automatic differentiation \cite{Griewank2003}.
+    
+    This way of solving the unsteady adjoint equation is a time-reverse
+    algorithm.  When solving (\ref{uadj}) using block-back-substitution,
+    the first step is to solve for $\psi^{(m)}$ using block $J_{m\,m}^T$
+    of the matrix and $b^{(m)}$ of the right hand side.  Since the
+    $J_{m\,m}^T$ and $b^{(m)}$ depend on $u^{(m)}$, the first step of
+    solving the adjoint equation requires the solution of the original
+    problem at the last time step.  As the block backward substitution
+    continues, the solution of the original problem is required in a
+    time-reverse order.  As a result, for this simple method to work
+    efficiently, the solution of the original problem at all time steps,
+    namely the full \emph{trajectory}, must be stored in memory.
+    
+    However, for even moderately large problems, the memory required to
+    store the full trajectory is too large.  One solution to this problem
+    is to use a \emph{checkpointing scheme} \cite{Griewank1992,Griewank2003,
+    Griewank2004}.  These methods are based on the idea of ``divide
+    and conquer.''  Although the whole trajectory cannot be stored,
+    we can speed up the computation by restarting from a set of checkpoints.
+    Additional forward iterations of the original problem move the solution
+    between checkpoints \cite{Charpentier2001}.
+    
+    In 1992 Griewank \cite{Griewank1992} first proposed the scheme
+    \emph{Revolve} which uses this idea to achieves optimal logarithmic
+    behavior in terms of both computational time and memory requirement.
+    Revolve and many other checkpointing schemes proposed since then use
+    $O(\log m)$ times the memory and computational time of the original
+    problem.  Using these schemes, the cost of solving the adjoint equation
+    is only a relatively small factor times the cost of solving the original
+    problem, even if the number of time steps is large.
+
+
+
+
+
+\section{Monte Carlo Method for Adjoint Equation}
+    In this section, we propose a Monte Carlo method for solving the unsteady
+    adjoint equation.  Both the memory requirement and computational time of
+    this scheme are $O(1)$ times that of the original problem, independent
+    of the number of time steps of the original problem.  As demonstrated
+    in section 6, our Monte Carlo method has better scaling efficiency than
+    the optimal exact solution method.
+    
+    Monte Carlo methods have already been shown to be efficient for
+    solving many systems of linear equations, especially when the system is
+    very large and the required precision is relatively low
+    \cite{Tan2002,Dimov1998,Alexandrov1998}.  These methods craft
+    statistical estimators whose mathematical expectation is a component
+    of the solution vector.  Random sampling of these estimators yields
+    approximate solutions\cite{Tan2002, Rubinstein1981,Westlake1968}.
+    The main ideas of these methods were proposed by von Neumann and
+    Ulam, and are extended by Forsythe and Liebler \cite{Forsythe1950}.
+    
+    Using Monte Carlo methods has several known advantages for solving
+    linear equations.  First, the computational cost of obtaining one
+    component of the solution vector using these methods is independent
+    of the size of the linear system \cite{Tan2002}.  More precisely, it
+    is $O(q\,l)$, where $q$ is the number of random walks and $l$ is
+    their length.  Both $q$ and $l$ are independent of the size of the
+    linear system, and can be controlled to obtain any desired
+    precision.  Also, Monte Carlo methods are known for their
+    parallel nature.  It is often very easy to parallelize them in a
+    coarse grained manner.  Even early in 1949, Metropolis and Ulam
+    \cite{Metropolisand1949} noticed the parallelism inherent in this
+    method.
+    
+    In addition to these advantages, Monte Carlo methods are
+    particularly suitable for solving the unsteady adjoint equation for
+    two reasons.  One is that the Monte Carlo method used in this paper
+    to solve the unsteady adjoint equation is a forward-time procedure.
+    In this procedure, we only use the information necessary to
+    advance to the next time step, which enables us to solve the adjoint
+    equation at the same time as we solve the original equation.  Thus we
+    do not need to store full trajectory, neither do we need to
+    iteratively resolve the original problem.  This is one great
+    advantage over the traditional method.  Secondly, we can directly
+    compute the inner product of the solution $\psi$ with a given vector
+    $c$, without computing $\psi$.  And the cost of computing $c^T \psi$
+    using this method is only $O(q\,l)$, which is the same as the cost of
+    computing one component of the solution vector.  In computing
+    $\frac{d\mathcal{F}}{d\eta}$ using equation (\ref{impder}) we can take
+    advantage of this by representing $\psi^T \frac{\partial
+    \mathcal{R}}{\partial \eta}$ as the inner product of $\psi$ with
+    $dim(\eta)$ given vectors
+    \[ \psi^T \frac{\partial \mathcal{R}}{\partial \eta}
+        = \left( \psi^T \frac{\partial \mathcal{R}}{\partial \eta_1},
+                 \psi^T \frac{\partial \mathcal{R}}{\partial \eta_2}, \ldots,
+                 \psi^T \frac{\partial \mathcal{R}}{\partial \eta_\xi}
+          \right) \qquad \mbox{ where } \xi = dim(\eta)
+    \]
+    When the dimension of the control vector $dim(\eta)$ is much smaller than
+    the dimension of the state vector $dim(u)$, we can save a lot of
+    computational cost by directly computing
+    $\psi^T \frac{\partial \mathcal{R}}{\partial \eta}$.
+    This is useful in applications such as wall control for drag reduction
+    \cite{Choi1993,Bewley2001}.
+    
+    In the remainder of this section, section 3.1 introduces the
+    (preconditioned) Neumann series representation of the solution.
+    In section 3.2, we construct the Markovian random walk and the $D$
+    estimator.  We prove that the $D$ estimator is an unbiased estimator
+    to the Neumann series representation of the solution.  These discussions
+    are valid for general linear systems and are presented in more detail in
+    \cite{Okten2005}.  Section 3.3 describes our Monte Carlo algorithm
+    designed specifically for solving unsteady adjoint equations using
+    the $D$ estimator.  Section 3.4 discusses the choice of transition
+    probabilities of the Markovian random walk based on the theory of
+    minimum probable error \cite{Dimov1991}.  Section 3.5 discusses choice
+    of preconditioner used in Neumann series representation for our
+    Monte Carlo method.  Finally, in section 3.6 we fully specify our
+    Monte Carlo algorithm used for Burgers' equation.
+    
+
+
+    \subsection{Neumann series representation}
+        To simplify notation, let
+        \[ \bar{A} = \left( \frac{\partial \mathcal{R}}{\partial u} \right)^T
+            \qquad \mbox{and} \qquad
+            \bar{b} = \left( \frac{\partial \mathcal{F}}{\partial u} \right)^T
+        \]
+        in adjoint equation (\ref{adj}).  The adjoint equation simplifies to
+        \[ \bar{A} \psi = \bar{b} . \] We multiply both sides by a
+        block-diagonal preconditioner matrix $P$, that is easy to invert
+        and preserves the block-upper-triangular structure of the Jacobian
+        $\bar{A}$. Denote
+        \begin{equation}
+            A = I - P \bar{A} \qquad \mbox{and} \qquad b = P \bar{b} .
+            \label{precond}
+        \end{equation}
+        We note that $A$ has the same block-upper-triangular and block-banded
+        structure of $\bar{A}$.  Now the adjoint equation becomes
+        \begin{equation}
+            \psi = A \psi + b .
+            \label{lineqn}
+        \end{equation}
+        The solution $\psi$ to the equation above can be expanded in a
+        \emph{Neumann series}:
+        \begin{equation}
+            \psi = b + A b + A^2 b + A^3 b + \ldots
+            \label{series1}
+        \end{equation}
+        The Neumann series converges and (\ref{series1} is valid if and only
+        if the spectral radius of $A$ is less than one. When it converges,
+        the Neumann series (\ref{series1}) is the solution of the adjoint
+        equation (\ref{lineqn}). Note that the inner product of $\psi$
+        with a given vector $c$ can be represented as
+        \begin{equation}
+            c^T \psi = c^T ( b + A b + A^2 b + A^3 b + \ldots )
+                     = \sum_{k=0}^\infty c^T A^k b
+            \label{series}
+        \end{equation}
+        The Monte Carlo method in this paper is a random sampling of this
+        infinite series by a Markovian random walk.
+    
+
+
+    \subsection{Markovian random walk and $D$ estimator}
+        For a given vector $c$, we use Markovian random walks to create
+        random samples of an estimator $D$ introduced in (\ref{D}) whose
+        mathematical expectation are the inner product of the solution
+        $\psi$ with the given vector $c$, i.e. $\mathbf{E}(D) = c^T \psi$.
+        In particular, when $c=e_i$, $\mathbf{E}(D) = \psi^T e_i = \psi_i$,
+        and we compute a component of the solution vector. The Markovian
+        random walks have a finite state space with size $N+1$, where $N$ is
+        the size of the adjoint equation. If we label the states as
+        $1,2,\ldots,N+1$, each of the first $N$ states correspond to a
+        component of the adjoint equation. The special state, a final exit
+        state, gets label $N+1$. The random walks begin from a birth
+        probability $r$, and follow a transition probability $p$, where
+        $p(i,j)$ is the transition probability from state $i$ to state $j$.
+        $r$ and $p$ must satisfy the following conditions \cite{Okten2005}:
+        \begin{enumerate}
+        \item $0\le r(j), p(i,j)\le 1$ for all $i$, $j$, \vspace{-4mm}
+              \begin{equation}\label{cond1}\end{equation}
+        \item $\sum_{j=1}^{N+1} p(i,j) = 1$ for all $i$, \vspace{-4mm}
+              \begin{equation}\label{cond2}\end{equation}
+        \item $\sum_{i=1}^N r(i) = 1$, \vspace{-4mm}
+              \begin{equation}\label{cond3}\end{equation}
+        \item $p(N+1,N+1) = 1$ \vspace{-4mm}
+              \begin{equation}\label{cond3_5}\end{equation}
+        \item $p(i,j) \ne 0 \Longleftrightarrow A_{i\,j} \ne 0$
+              and $r(i) \ne 0 \Longleftrightarrow c_i \ne 0$. \vspace{-4mm}
+              \begin{equation}\label{cond4}\end{equation}
+        \end{enumerate}
+        where $A_{i\,j}$ is the $i,j$th entry of the matrix $A$, and $c_i$
+        is the $i$th component of the vector $c$ In the four conditions above,
+        the first three define $r$ and $p$ as birth and transition
+        probabilities.  The fourth condition defines the state $N+1$ as
+        the final exit state.  We note that the probability that the
+        Markovian random walk transits from state $j$ to the final exit
+        state is $p(j,N+1) = 1 - \sum_{i=1}^N p(i,j)$.  Once it reaches
+        the final exit state, it always stays there with probability 1.
+        When this happens, we say that the random walk was \emph{absorbed}
+        in state $j$.  The last condition means that the random walks always
+        stay tied to the matrix, which allows us to go from the random walk
+        model described by $p$ and $a$ to the Neumann series (\ref{series})
+        that involves $A_{i\,j}$ and $c_i$.
+        
+        Now we'll relate the random walk to the components of the matrix $A$.
+        Indeed, let the Markov chain be
+        \[ \alpha =
+            \left( \alpha_0, \alpha_1, \ldots, \alpha_n, \ldots \right),
+        \]
+        and
+        \[ \mathbf{i} =
+            \left( i_0, i_1, \ldots , i_l, N+1, N+1, \ldots \right),
+            \quad 1\le i_j\le N
+        \]
+        be a typical path of the Markov chain that begins at state $i_0$ and
+        is absorbed at state $i_l$.  The probability that the Markov chain
+        takes this path is
+        \[ \mathcal{P}(\alpha=\mathbf{i}) =
+            r(i_0) \; p(i_0 i_1) \; p(i_1 i_2) \; \ldots \;
+            p(i_{l-1} I_l) \; p(i_l,N+1)
+        \]
+        We define
+        \[ w_{i\,j} = \left\{ \begin{aligned}
+                & \frac{A_{i\,j}}{p(i,j)} && \mbox{if } p(i,j) \ne 0 \\
+                & 0                       && \mbox{if } p(i,j)  =  0 \\
+            \end{aligned} \right.
+        \]
+        and as in \cite{Okten2005}, we define the weight $W_k$ as a random
+        variables on the space of random walks $\alpha$:
+        \begin{equation} \label{W}
+            W_k(\alpha) =
+            \frac{c_{\alpha_0}}{r(\alpha_0)}
+            \prod_{j=1}^k w_{\alpha_j \alpha_{j-1}} \qquad 0 \le k \le l
+        \end{equation}
+        The following proposition gives us insight on why we define the weight
+        in this way.
+        \begin{proposition} \label{prop}
+            Assume conditions (\ref{cond1}) to (\ref{cond4}) are satisfied.
+            Denote $(\cdot)_j$ as the $j$th component of a vector, and
+            $(\cdot)_{i j}$ as the $i,j$ entry of a matrix.  Then
+            \begin{equation} \label{approx}
+                \mathbf{E}( W_k I_{\{\alpha_k = j\}} ) = \left(c^T A^k\right)_j
+            \end{equation}
+            In particular, if $c = e_i$,
+            \begin{equation} \label{matapprox}
+                \mathbf{E}( W_k I_{\{\alpha_k = j\}} ) = \left(A^k\right)_{i j}
+            \end{equation}
+        \end{proposition}
+        \begin{proof}
+            Since $W_0 = \frac{c_{\alpha_0}}{r(\alpha_0)}$ and
+            $\mathcal{P}(\alpha_0 = j) = r(j)$,
+            \[ \mathbf{E}[W_0 I_{\{\alpha_0 = j\}}]
+                = \mathcal{P}(\alpha_0 = j) \frac{c_j}{r(j)} = c_j
+            \]
+            So (\ref{approx}) holds for $k=0$.  Assume it holds for certain $k$,
+            we prove it holds for $k+1$.
+            \[ \begin{split}
+                \mathbf{E}[W_{k+1} I_{\{\alpha_{k+1} = j\}}]
+                &= \mathbf{E}\left[ \sum_i \left( I_{\{\alpha_k = i,
+                    \alpha_{k+1} = j\}} W_k \; w(i,j) \right)\right] \\
+                &= \sum_i \mathbf{E}\left[ I_{\{\alpha_k = i,
+                    \alpha_{k+1} = j\}} W_k \right] \frac{A_{i\,j}}{p(i,j)}
+            \end{split} \]
+            By using the tower property of conditional expectations,
+            ``taking out what is known'', and applying Markov property, we have
+            \[ \mathbf{E}\left[ I_{\{\alpha_k = i,
+                                     \alpha_{k+1} = j\}} W_k \right]
+                = \mathbf{E}\left[ I_{\{\alpha_k = i\}} W_k \right] p(i,j)
+            \]
+            Therefore, by the induction hypothesis,
+            \[ \begin{split}
+                \mathbf{E}[W_{k+1} I_{\{\alpha_{k+1} = j\}}]
+                &= \sum_i \mathbf{E}\left[ I_{\{\alpha_k = i\}} W_k \right]
+                          A_{i\,j} \\
+                &= \sum_i  \left(c^T A^k\right)_i A_{i\,j} \\
+                &= \left(c^T A^{k+1}\right)_j
+            \end{split} \]
+            Thus we conclude that (\ref{approx}) holds true for all
+            $k\ge 0$. (\ref{matapprox}) follows trivially.
+        \end{proof}
+        This tells us that $W_k I_{\{\alpha_k = j\}}$ is in fact a randomly
+        sparsified version of vector $c^T A^k$.  The randomly sparsified
+        vector contains only one nonzero entry.  In every step of the random
+        walk, $W_k I_{\{\alpha_k = j\}}$ is multiplied by $A$, and further
+        sparsified. We can think of it as the sparsified version of $c^T A^k$
+        is multiplied by $A$, by which we get an approximation of
+        $c^T A^{k+1}$, and then sparsify it.  Because the Neumann series
+        (\ref{series}) gives us a relationship between $c^T\psi$ and
+        $c^T A^k$, we can use this relationship to build an estimator
+        for $c^T \psi$ in terms of $W_k I_{\{\alpha_k = j\}}$, which is
+        a randomly sparsified version of $c^T A^k$.
+        
+        \begin{definition}
+            Define the $D$ estimator by
+            \begin{equation} \label{D}
+                D(\alpha) = \sum_{k=0}^\infty W_k(\alpha) b_{\alpha_k}
+            \end{equation}
+            where $\alpha = (\alpha_0,\alpha_1,\ldots)$ is the random walk;
+            $(b_1,\ldots,b_N)^T$ is the right hand side of equation
+            (\ref{lineqn}), and $b_{N+1} = 0$.
+        \end{definition}
+        Now we prove the main theorem that supports the Monte Carlo method.
+        \begin{theorem} \label{mainthm}
+            Assume that the Neumann series (\ref{series1}) converges for $|A|$,
+            and conditions (\ref{cond1}) to (\ref{cond4}) are satisfied.
+            Then the expectation of the $D$ estimator
+            \[ \mathbf{E}( D(\alpha) ) = c^T \psi \]
+            where $\psi$ is the solution of equation (\ref{lineqn}).
+        \end{theorem}
+        \begin{proof}
+            Since $b_{\alpha_k} = \sum_j I_{\{\alpha_k=j\}}$, the expectation
+            of the $D$ estimator can be represented as
+            \[ \begin{split}
+                \mathbf{E}[D] &=
+                \mathbf{E}\left[ \: \sum_{k=0}^\infty W_k \, b_{\alpha_k}
+                               \, \right] \\
+                &= \mathbf{E}\left[ \: \sum_{k=0}^\infty
+                                \sum_j W_k I_{\{\alpha_k=j\}} b_j \,\right] \\
+                &= \sum_{k=0}^\infty \sum_j \mathbf{E}\left[ W_k
+                                I_{\{\alpha_k=j\}} \right] b_j
+            \end{split} \]
+            The condition that the Neumann series converges for $|A|$ justifies
+            the exchange of infinite sum and expectation by dominated
+            convergence theorem.  It follows from proposition (\ref{prop}) that
+            \[ \mathbf{E}[D] = \sum_{k=0}^\infty \sum_j (c^T A^k)_j b_j
+                = \sum_{k=0}^\infty c^T A^k b
+            \]
+            which is the Neumann series expansion (\ref{series}). Thus we have
+            \begin{equation}
+                \mathbf{E}[D] = c^T \psi
+            \end{equation}
+            i.e. $D$ is an unbiased estimator of $c^T \psi$.
+        \end{proof}
+        
+        This theorem suggests that we can use Monte Carlo method based on the
+        $D$ estimator to approximate $c^T \psi$
+        \[ c^T \psi \approx \frac1q \sum_{p=1}^q D(\alpha[p]), \]
+        where $\alpha[p]$, $1\le p \le q$ are independent identically
+        distributed random walks.  And the following corollary is a direct
+        consequence of Theorem \ref{mainthm} and the strong law of large
+        number.
+        \begin{corollary}
+            Under the conditions of Theorem \ref{mainthm}, the estimated
+            solution by the Monte Carlo method
+            \[ \frac1q \sum_{p=1}^q D(\alpha[p]) \to c^T \phi \]
+            almost surely as $q\to\infty$.
+        \end{corollary}
+        This result justifies our Monte Carlo approach for solving adjoint
+        equation by saying that as the number of random walks increases,
+        the solution of the Monte Carlo method asymptotically converges to
+        the exact solution.
+
+
+    
+    \subsection{Monte Carlo algorithm}
+        In this section, we explain the Monte Carlo algorithm for solving the
+        unsteady adjoint equation based on the $D$ estimator constructed in
+        the last section.
+        
+        We note that condition (\ref{cond4}) of the transition probability
+        matrix guarantees that $\mathbf{P}$ has the same block-upper-triangular
+        and block-banded structure as matrix $A$. We remember that the
+        components of $u$ are ordered by time steps. As a result, random
+        walks defined by this transition probability matrix can only possibly
+        walk to later time steps (upper-diagonal blocks of $\mathbf{P}$ are
+        non-zeros), or walk within the same time step (diagonal blocks of
+        $\mathbf{P}$ are non-zero), but never walk backwards to previous
+        time steps (lower-diagonal blocks of $\mathbf{P}$ are always zero).
+        Therefore, the Markovian random walks only go forward in time.
+        This makes the following forward time Monte Carlo algorithm possible.
+        
+        In this algorithm, we generate $q$ independent identically
+        distributed random walks $\alpha[p]$, $1\le p\le q$. Each of them
+        has transition probabilities $p(i,j)$ and birth probabilities $r(i)$
+        that satisfies the conditions (\ref{cond1}-\ref{cond4}). We will
+        discuss the choices for $r$ and $p$ in the next section. We denote
+        $\alpha_k[p]$ as the current position of random walk $\alpha[p]$,
+        and we say that a random walk $\alpha[p]$ is at time step $t$ if
+        $\alpha_k[p]$ is in the range of indices that represent time step
+        $t$. Let $W[p]$ denote $W_k(\alpha[p])$, the weight of random walk
+        at current step. $D[p]$ stores the accumulative sum of the $D$
+        estimator (\ref{D}), which equals to $D(\alpha)$ after the random
+        walk is absorbed.
+        
+        \vspace{3mm}\hspace{-12mm}
+        \framebox{ \begin{minipage}{6in} \vspace{2mm}
+            \begin{enumerate}
+            \item For each $1\le p\le q$, choose $\alpha_0[p]$ randomly by
+                  birth probability vector $r$, and initialize
+                  \[ W[p] = c_{\alpha_0[p]} / r(\alpha_0[p]) \;; \quad
+                            D[p] = W[p] b_{\alpha_0[p]} .
+                  \]
+                  Then start from $t=1$, do step 2-4, until done with the
+                  last time step $t=m$.
+            \item Solve the original problem at time step $t$, which
+                  enables us to compute the corresponding blocks of matrix
+                  $A$ and $p$.
+            \item For each random walk $\alpha_[p]$ that is at time step $t$,
+                  choose its next state $\alpha_{k+1}[p]$ randomly by
+                  transition probabilities $p$.  If $\alpha_{k+1}[p]$ is
+                  not the final exit state, update
+                  \[ W[p] = W[p] w_{\alpha_k[p] \alpha_{k+1}[p]} \;; \quad
+                      D[p] = D[p] + W[p] b_{\alpha_{k+1}[p]} .
+                  \]
+                  If $\alpha_{k+1}[p]'$ is the final exit state, the random
+                  walk is absorbed and we freeze $D[p]$.
+            \item Repeat step 3 until all random walks at time step $t$ are
+                  either absorbed or left the time step.  If $t<m$, then let
+                  $t = t+1$ and go to step 2.
+            \item After done with the last time step $m$, all random walks
+                  are absorbed.  Compute the sample mean of the estimators
+                  $\frac1q \sum_{p=1}^q D[p]$, which is our approximation
+                  to $c^T \psi$.
+            \end{enumerate}
+            \vspace{1mm} \end{minipage}
+        }
+        \vspace{3mm}
+        
+        It is clear that this is a forward-time algorithm in which we only
+        need to store the current time steps of the original problem and
+        no iterations are needed.  Further, it directly yields the inner
+        product of the solution with the given vector.  Indeed, there is no
+        difficulty with this algorithm to solve multiple linear functions
+        of the solution vector at the same time.  This property is useful
+        in many adjoint based methods.  For example, in computing
+        $ \frac{d\mathcal{F}(u(\eta),\eta)}{d\eta} $ using formula
+        (\ref{impder}), we can use the Monte Carlo method to directly compute
+        $ \psi^T \frac{\partial \mathcal{R}}{\partial \eta} $,
+        which is the inner product of the adjoint solution $\psi$ with
+        $\frac{\partial \mathcal{R}}{\partial \eta_i}, i=1,...,dim(\eta)$.
+        This can be directly obtained from the algorithm described above.
+        The cost of this algorithm is $O(\xi\, q\, l)$ plus the cost of
+        the original problem, where $\xi$ is the dimension of the control
+        vector; $q$ is the number of random walks for each evaluation of
+        inner product; and $l$ is the average length of the random walk,
+        which is proportional to the number of time steps $m$ of the original
+        problem.  When the dimension of the control vector is much smaller
+        than the mesh size, and the required precision is relatively low
+        (which allows us to choose a small $q$), the cost of solving the
+        adjoint equation in this algorithm is a small overhead.  This is
+        particularly attractive especially compared to solving the exact
+        solution of the unsteady adjoint equation, which is significantly
+        more costly in computation time and storage than the original problem.
+    
+
+
+\section{Analysis of the Monte Carlo method}
+    In the last section, we derived the algorithm of using random walk Monte
+    Carlo to solve the discrete adjoint equation, and theoretically proved that
+    as the number of samples increases, the solution obtained by our method
+    converges asymptotically to the exact solution.  In practice, however,
+    it is only possible to run a finite number of random walks with limited
+    computational resources.  In this section, we address the following
+    questions: how much error is made by running a finite number of random
+    walks, and how this error can be controlled and minimized.
+    
+    Before we start, we definition the probable error in order to quantify
+    the difference between the Monte Carlo approximation and the exact solution
+    of the adjoint equation.
+    \begin{definition}
+        Let $I$ be the value to be estimated by Monte Carlo method,
+        and $D$ be its unbiased estimator. The probable error for the Monte
+        Carlo method is defined to be
+        \begin{equation}
+            r = \sup \left\{ s : \mathcal{P}\left( |I-D| \ge s \right)
+                             > \frac12 \right\}
+        \end{equation}
+    \end{definition}
+    The probable error specifies the range which contains 50\% of the possible
+    values of the estimator. In the case of continuous distribution, this
+    is equivalent to the definition in \cite{Tan2001} and \cite{Sobol1973}.
+
+    The probable error is closely related to the variance of the estimator.
+    Suppose $D_1, \ldots, D_q$ are independent and identically distributed
+    samples of $D$, If the variance of estimator $D$ is bounded, the Central
+    Limit Theorem
+    \[ \mathcal{P} \left( \frac{\sum D_i}q - I \le x \right) \to \Phi(x)
+    \]
+    holds. When $q$ is large, the probable error of the average of the $q$
+    samples is \cite{Tan2001,Tan2002}
+    \begin{equation} \label{proberr}
+        r \approx 0.6745 \left( \frac{\text{Var} D }{q} \right)^{1/2} .
+    \end{equation}
+    Therefore, the probable error decreases when the number of samples $q$
+    increases, or when the variance of the estimator $D$ decreases.  Using
+    this formula, we can estimate and control the probable error of our
+    Monte Carlo method by estimating the variance of the $D$ estimator.
+    
+    In the rest of this section, we focus on the variance of the $D$ estimator.
+    To make mathematical derivation cleaner, we denote \[ p_{ij} = p(i,j)\]
+    to be the transition probability from state $i$ to state $j$,
+    \[\quad p_i = p(i,N+1)
+    \]
+    to be the transition probability from state $i$ to the final exit state,
+    and \[r_i = r(i)\] to be the birth probability at state $i$.
+    
+
+
+    \subsection{Variance decomposition}
+        Suppose the mean and variance of the $D$ estimator of a random walk
+        starting from state $i$ are $\mathbf{E}_i(D)$ and $\mathbf{V}_i(D)$
+        respectively. Since the Markov chain at state $i$ has $p_i$
+        probability of going to the final exit state, and $p_{ij}$
+        probability of going to the $j$th state, we know
+        \[ \mathbf{E}_i(D) = p_i \left( \frac{1}{p_i}\, b_i\right) +
+            \sum_{j:\,A_{ij}\ne0}\: p_{ij} \left(\,\frac{A_{ij}}{p_{ij}}\,
+                                                 \mathbf{E}_j(D) \right)
+            = b_i + \sum_{j:\,A_{ij}\ne0}\: A_{ij}\, \mathbf{E}_j(D)
+        \]
+        which corresponds to the linear equation (\ref{lineqn}) we want
+        to solve. Apply the same analysis to the expectation of $D^2$,
+        we can obtain a formula for the variance of the $D$ estimator,
+        \begin{equation} \begin{split} \label{splittrans}
+            \mathbf{V}_i(D)
+            &= \mathbf{E}_i \left( D^2 \right) - \mathbf{E}_i(D)^2 \\
+            &= p_i \left( \frac{b_i}{p_i}\right)^2
+               + \sum_{j:\,A_{ij}\ne0}\: p_{ij}
+               \left( \,\frac{A_{ij}^2}{p_{ij}^2}\, \mathbf{E}_j(D^2) \right)
+               - \mathbf{E}_i(D)^2 \\
+            &= \left( \frac{b_i^2}{p_i} + \sum_{j:\,A_{ij}\ne0}\:
+                      \frac{A_{ij}^2}{p_{ij}}\, \mathbf{E}_j(D)^2 -
+                      \mathbf{E}_i(D)^2 \right)  \;
+               + \left( \sum_{j:\,A_{ij}\ne0}\: \frac{A_{ij}^2}{p_{ij}}\,
+                        \mathbf{V}_j(D) \right)
+        \end{split} \end{equation}
+        We can see that the variance of a random walk starting at state $i$
+        comes from two parts, The first part
+        \begin{equation} \label{part1trans}
+            \mathbf{V}_i^{(1)}(D) = \frac{b_i^2}{p_i}
+            + \sum_{j:\,A_{ij}\ne0}\:
+            \frac{A_{ij}^2}{p_{ij}}\, \mathbf{E}_j(D)^2
+            - \mathbf{E}_i(D)^2
+        \end{equation}
+        This part of variance is caused by the first step of the random walk.
+        The second part
+        \begin{equation} \label{part2trans}
+            \mathbf{V}_i^{(2)}(D) = \sum_{j:\,A_{ij}\ne0}\:
+                \frac{A_{ij}^2}{p_{ij}}\, \mathbf{V}_j(D)
+        \end{equation}
+        is a weighted average of the variance of random walks starting from
+        all the states that state $i$ leads to.  This part of variance is
+        caused solely by the random walk starting from the second step.
+        
+        Similarly, we can calculate the variance of the $D$ estimator of a
+        random walk starting with birth probability $r_i$,
+        \begin{equation} \label{splitbirth} \begin{split}
+            {\bf V}_r(D)
+            &= {\bf E}_r\left(D^2\right) - {\bf E}_r(D)^2 \\
+            &= \sum_{i\,:\,r_i\ne0} r_i\left(\frac{c_i^2}{r_i^2}\,
+               {\bf E}_i\left(D^2\right)\right) - {\bf E}_r(D)^2 \\
+            &= \left(\sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\,
+                     {\bf E}_i(D)^2 - {\bf E}_r(D)^2\right)
+               + \left( \sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\,
+                       {\bf V}_i\left(D^2\right) \right)
+        \end{split} \end{equation}
+        where ${\bf E}_i(D)$ and ${\bf V}_i(D)$ are the mean and variance
+        of the random walk starting deterministically from the state $i$.
+        We can see that the variance of a random walk starting with birth
+        probability $r_i$ also comes from two parts. The first part
+        \begin{equation} \label{part1birth}
+            {\bf V}_r^{(1)}(D) = 
+            \sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\, {\bf E}_i(D)^2
+             - {\bf E}_r(D)^2
+        \end{equation}
+        is caused by the randomness of the birth state.  The second part
+        \begin{equation} \label{part2birth}
+            {\bf V}_r^{(2)}(D) = 
+            \sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\, {\bf V}_i\left(D^2\right)
+        \end{equation}
+        is a weighted average of the variance of random walks starting from
+        all the possible birth states.  This part of variance is caused by
+        the random walk starting from the each possible birth states.
+        
+        Based on this split of variance, the next subsection discusses
+        choice of transition and birth probabilities $p_i$ and $r_i$ that
+        reduces each component of the decomposition.
+    
+
+
+    \subsection{Choice of transition and birth probabilities}
+        Finding the probabilities that make the variance as small as
+        theoretically possible has been shown to be impractically time
+        consuming for Monte Carlo linear solvers \cite{Dimov1991,Dimov1993}.
+        For this reason, we focus on finding `almost optimal' transition
+        and birth probabilities by minimizing upper bounds of the variances.
+
+        The upper bounds on which we base our almost optimal transition
+        probabilities are
+        \[ \begin{split}
+            \mathbf{V}_i^{(1)}(D)
+            &= \frac{b_i^2}{p_i} + \left(\sum_{j:\,A_{ij}\ne0}\:
+               \frac{A_{ij}^2}{p_{ij}}\, \mathbf{E}_j(D)^2\right)
+               - \mathbf{E}_i(D)^2 \\
+            &\le \frac{b_i^2}{p_i} + \left(\sum_{j:\,A_{ij}\ne0}\:
+                             \frac{A_{ij}^2}{p_{ij}} \right) \mathbf{B}^2
+                 - \mathbf{E}_i(D)^2
+        \end{split} \]
+        and
+        \[ \begin{split}
+            \mathbf{V}_i^{(2)}(D)
+            &= \sum_{j:\,A_{ij}\ne0}\:
+               \frac{A_{ij}^2}{p_{ij}}\, \mathbf{V}_j(D) \\
+            &\le \left(\sum_{j:\,A_{ij}\ne0}\: \frac{A_{ij}^2}{p_{ij}}\right)\, 
+               \max_{j:\,A_{ij}\ne0} \mathbf{V}_j(D),
+        \end{split} \]
+        where 
+        \[ \mathbf{B} = \max |\mathbf{E}_j(D)|
+        \]
+        These bounds are chosen because individual $\mathbf{E}_j(D)^2$ and
+        $\mathbf{V}_j(D)$ are not known a priori.  They are therefore
+        substituted by a common upper bound.  The optimal $p_{ij}$ and $p_i$
+        for these upper bounds, under the constraints
+        \[ \sum_j p_{ij} + p_i = 1\quad\mbox{and}\quad p_{ij}\ge 0, \]
+        are given by the formulae
+        \footnote{(\ref{trans}) and (\ref{absorption}) together minimizes
+        upper bound of $\mathbf{V}_i^{(1)}(D)$; (\ref{trans}) alone minimizes
+        upper bound of $\mathbf{V}_i^{(2)}(D)$ under the constraints.}
+        \begin{equation} \label{trans}
+            p_{ij}^* = \frac{|A_{ij}|\, \mathbf{B}}
+                            {|b_i| + \sum_j |A_{ij}|\, \mathbf{B}}
+        \end{equation}
+        and
+        \begin{equation} \label{absorption}
+            p_i^* = \frac{|b_i|} {|b_i| + \sum_j |A_{ij}|\, \mathbf{B}}.
+        \end{equation}
+        These are the almost optimal transition probabilities.  Note that
+        since $\mathbf{B}$ is not known a priori, it needs to be estimated
+        unless $b_i = 0$.
+        
+        Similarly, we construct upper bounds for ${\bf V}_r^{(1)}(D)$ and
+        ${\bf V}_r^{(2)}(D)$:
+        \[ \begin{split}
+            {\bf V}_r^{(1)}(D)
+            &= \left(\sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\,
+                     {\bf E}_i(D)^2\right) - {\bf E}_r(D)^2 \\
+            &\le \left( \sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\right)
+                 \mathbf{B}^2 - {\bf E}_r(D)^2
+        \end{split} \]
+        \[ \begin{split}
+            {\bf V}_r^{(2)}(D) &= 
+                \sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\,
+                {\bf V}_i\left(D^2\right)  \\
+            &\le \left( \sum_{i\,:\,r_i\ne0} \frac{c_i^2}{r_i}\right)
+                \left(\max {\bf V}_i\left(D^2\right)\right)
+        \end{split} \]
+        The almost optimal birth probabilities that minimizes these upper
+        bounds are given by the formula
+        \begin{equation} \label{birth}
+            r_i^* = \frac{|c_i|}{\sum_i|c_i|}
+        \end{equation}
+        Because the almost optimal transition and birth probabilities
+        minimize upper bounds of the estimator variance, we use this
+        choice of probabilities in all our numerical experiments presented
+        later in this paper.
+
+    
+
+    \subsection{Growth of variance}
+        This subsection studies how the variance of our $D$ estimator can
+        grow assuming the almost optimal transition and birth probabilities
+        derived in the last subsection.  First, we plug the optimal
+        probabilities into the upper bounds of $\mathbf{V}_i^{(1)}$ and
+        $\mathbf{V}_i^{(2)}$, we get
+        \[ \mathbf{V}_i^{(1)}(D)
+            \le \left(|b_i| + \mathbf{\Gamma}_i\, \mathbf{B} \right)^2
+                - \mathbf{E}_i(D)^2,
+        \]
+        and
+        \[ \mathbf{V}_i^{(2)}(D)
+            \le \left( \frac{|b_i|}{\mathbf{B}} + \mathbf{\Gamma}_i \right)
+                \mathbf{\Gamma}_i\; \max_{j:\,A_{ij}\ne0} \mathbf{V}_j(D),
+        \]
+        where
+        \[ \mathbf{\Gamma}_i = \sum_j |A_{ij}|.
+        \]
+        The total variance is the sum of the two components of the variance
+        decomposition, thus
+        \begin{equation} \label{vargrowth}
+            \mathbf{V}_i(D)
+            \le \left((|b_i| + \mathbf{\Gamma}_i\, \mathbf{B} )^2
+                - \mathbf{E}_i(D)^2\right)
+              + \left( \frac{|b_i|}
+                {\mathbf{B}} \mathbf{\Gamma}_i + \mathbf{\Gamma}_i^2 \right)
+                \max_{j:\,A_{ij}\ne0} \mathbf{V}_j(D).
+        \end{equation}
+        This equation characterize the growth of variance as the Monte Carlo
+        random walk proceeds.  In the case of explicit time stepping, all
+        $j$ such that $A_{ij}\ne 0$ are in the next time step of $i$.  As
+        the random walk proceed through time steps, the variance can suffer
+        from exponential growth if the multiplicative factor
+        $\left( \frac{|b_i|} {\mathbf{B}} \mathbf{\Gamma}_i
+        + \mathbf{\Gamma}_i^2 \right)$ is greater than 1.  If this is the
+        case, the probable error can be too large for our Monte Carlo method
+        to be practical.  On the other hand, if this factor is less or equal
+        to 1, the variance grow at most linearly.  For this reason, the size
+        of multiplicative factor is critical in the efficiency of our Monte
+        Carlo method.
+
+        In the case of conservation law PDEs discretized with a positive
+        coefficient scheme, we know the size of this multiplicative factor.
+        The discrete conservation property guarantees that
+        \[ \sum_j A_{ij} = 1,
+        \]
+        for all but boundary grid points.  Also, all $A_{ij}$ are non-negative
+        in a positive coefficient scheme.  As a result of these two properties,
+        \begin{equation} \label{gamma1}
+            \Gamma_i = \sum_j |A_{ij}| = \sum_j A_{ij} = 1.
+        \end{equation}
+        In addition, if the adjoint equation does not have a source term,
+        then $b_i = 0$, and the multiplicative factor
+        \[ \frac{|b_i|} {\mathbf{B}}\, \mathbf{\Gamma}_i
+            + \mathbf{\Gamma}_i^2 = 1.
+        \]
+        This implies that the probable error of our Monte Carlo method does
+        not increase exponentially in this case.  This is indeed true, as
+        seen in our numerical experiments, that the error of our Monte Carlo
+        adjoint solver decreases as the number of time steps gets larger.
+        In case the adjoint equation have a source term, the discretized
+        source term $b_i$ is of order of $\Delta t$, thus the multiplicative
+        factor
+        \[ \frac{|b_i|} {\mathbf{B}}\, \mathbf{\Gamma}_i
+            + \mathbf{\Gamma}_i^2 = 1 + O(\Delta t).
+        \]
+        This suggests that for a fixed $T$, as the discretization refines,
+        the total amount of variance growth remain bounded.
+
+        For systems other than scalar transport equations, equation 
+        (\ref{gamma1}) may not be true. In many cases, a proper choice of
+        preconditioner is required to prevent exponential growth of variance.
+
+
+
+    \subsection{Choice of preconditioner}
+        The choice of the preconditioner matrix $P$\footnote{Not to be
+        confused with the transition probability matrix $\mathbf{P}$} in
+        equation (\ref{precond}) controls the behaviors of the Neumann
+        series, and influences the variance growth of the estimator $D$. A
+        good choice can improve the precision of the result and reduce the
+        cost by requiring fewer samples, while a bad choice can make the
+        variance grow exponentially.  Thus, the main purposes of the
+        preconditioner is to control the multiplicative factor in the variance
+        growth by reducing $\Gamma_i$.  Just like choosing a preconditioner
+        a linear system, there is no universal best choice. Still, there are
+        a few preconditioners that we wish to mention in the setting of
+        unsteady adjoint equation.
+        
+        First of all, if the Jacobian matrix is diagonal dominant, a possible
+        choice of preconditioner is the inverse of the diagonal part of the
+        Jacobian. This method is called \emph{diagonal splitting}.  Diagonal
+        splitting makes the Neumann series equivalent to the Jacobian
+        iteration scheme, which has guaranteed convergence for diagonal
+        dominant matrices.
+        
+        Tan proposes a relaxed Monte Carlo linear solver in
+        \cite{Tan2001,Tan2002}, which is equivalent to choosing a diagonal
+        preconditioner that is not equal to the diagonal part of the Jacobian
+        matrix.  It was shown that this approach has improved performance
+        over diagonal splitting for many problems.
+        
+        Srinivasan \cite{Srinivasan2003} studied non-diagonal splitting
+        Monte Carlo solvers, which is equivalent to choosing the preconditioner
+        to be inverse of the diagonal and first sub-diagonal or super-diagonal
+        of $\bar{A}$.  His approach is suitable for a larger class of problems
+        than diagonal conditioning.  We have not yet investigated the last two
+        more advanced preconditioner in the context of solving unsteady adjoint
+        equations.
+
+        In the context of partial differential equations, choosing a
+        preconditioner that transforms the random walk into the frequency
+        space is an ideal currently being investigated.  Preliminary results
+        show that this preconditioner may be a solution to certain problems
+        on which achieving a bounded variance growth using existing
+        preconditioners is difficult.
+    
+
+
+
+
+\section{Example of Monte Carlo algorithm: Burgers' Equation}
+    In this section, we demonstrate a concrete example of the Monte Carlo
+    algorithm for solving adjoint equations.  The example is Burgers' equation
+    \[ \mathcal{R}(x,t) = u_t + \left( \frac{u^2}{2} \right)_x = 0 , \]
+    discretized temporally by the forward Euler scheme, and spatially by the
+    first order up-winding scheme.  Our original problem is the fully
+    discretized equation
+    \begin{equation} \label{expG}
+        \mathcal{R}_i^{(t)} = u_i^{(t)} - u_i^{(t-1)}
+        + \frac{\Delta t}{\Delta x}\left( f_{i+\frac12}^{(t-1)}
+        - f_{i-\frac12}^{(t-1)} \right) = 0,
+        \qquad t = 1,2,\ldots,m,
+    \end{equation}
+    where $f$ is the numerical flux computed using the up-winding formula
+    \[ f_{i+\frac12}^{(t)} =
+        \left\{ \begin{aligned}
+            & \frac12 \left( u_i^{(t)} \right)^2 &&
+                \mbox{ if } u_i^{(t)} + u_{i+1}^{(t)} > 0 \\
+            & \frac12 \left( u_{i+1}^{(t)} \right)^2 &&
+                \mbox{ if } u_i^{(t)} + u_{i+1}^{(t)} \le 0.
+    \end{aligned} \right. \]
+    In this case, the full state vector $u$ is
+    \[ u = \left( u_1^{(1)}, \ldots, u_n^{(1)},\quad u_1^{(2)}, \ldots,
+           u_n^{(2)}, \quad \ldots\ldots,\quad
+           u_1^{(m)}, \ldots, u_n^{(m)} \right)^T
+    \]
+    and the full constraint is
+    \[ \mathcal{R} = \left( \mathcal{R}_1^{(1)}, \ldots, 
+                            \mathcal{R}_n^{(1)}, \quad
+                            \mathcal{R}_1^{(2)}, \ldots,
+                            \mathcal{R}_n^{(2)}, \quad \ldots\ldots,\quad
+                            \mathcal{R}_1^{(m)}, \ldots,
+                            \mathcal{R}_n^{(m)} \right)^T
+    \]
+    where $n$ is the number of mesh points, and $m$ is the number of
+    time steps.  The size of the adjoint equation as a linear system is
+    $N = m n$.
+    
+    For this example, we'll analyze the structure of the adjoint
+    equation, derive the birth probability matrix and transition
+    probability matrix, and walk through the Monte Carlo algorithm.
+    Let's begin with the constraint Jacobian matrix.  The
+    forward Euler temporal discretization scheme is a one-step scheme,
+    and the constraint (\ref{expG}) at a time step $t$ only depends on
+    $u$ at time step $t$ and $t-1$.  Hence, the only nonzero blocks in
+    the Jacobian (\ref{lower}) are $J_{t t}$ and $J_{t\: t-1}$,
+    $t=1,\ldots,m$.  Moreover, the equation is discretized using explicit
+    scheme, so $\frac{\partial \mathcal{R}_i^{(t)}}{\partial u_j^{(t)}}$ is
+    nonzero only if $i=j$.  Therefore, the diagonal blocks of the
+    Jacobian are identity matrices,
+    $$ J_{t t} = \frac{\partial \mathcal{R}^{(t)}}{\partial u^{(t)}} = I. $$
+    In this case, we use no preconditioner, and
+    \[ A = I - \left( \frac{\partial \mathcal{R}}{\partial u} \right)^T =
+    \begin{bmatrix}
+    0        & -J_{2 1}^T &        & \\
+             & 0          & \ddots & \\
+             &            & \ddots & -J_{m\, m-1}^T \\
+             &            &        & 0
+    \end{bmatrix}. \]
+    The Neumann series associated with this matrix has finite length $m$.
+    
+    Each block $J_{t\,t-1}^T$ in this matrix is well structured.  We note
+    that the residue (\ref{expG}) at mesh-point $i$ only depends on $u$ at
+    mesh-point $i-1,x$ and $i+1$.  Thus
+    $\frac{\partial \mathcal{R}_i^{(t)}}{\partial u_j^{(t)}}$
+    is nonzero only if $i-1\le j\le i+1$,
+    and the off diagonal blocks $J_{t\, t-1}$ are tri-diagonal matrices
+    with entries
+    \begin{equation} \label{burgerR} \begin{split}
+       \frac{\partial \mathcal{R}_i^{(t)}}{\partial u_{i-1}^{(t-1)}}
+       =& - a_i^{(t)} \frac{\Delta t}{\Delta x} u_{i-1}^{(t)} \\
+       \frac{\partial \mathcal{R}_i^{(t)}}{\partial u_{i  }^{(t-1)}}
+       =& - 1 - b_i^{(t)} \frac{\Delta t}{\Delta x} u_{i}^{(t)} \\
+       \frac{\partial \mathcal{R}_i^{(t)}}{\partial u_{i+1}^{(t-1)}}
+       =& - c_i^{(t)} \frac{\Delta t}{\Delta x} u_{i-1}^{(t)}
+    \end{split} \end{equation}
+    where
+    \[ \begin{split}
+       a_i^{(t)} &= \left\{ \begin{aligned}
+                        & -1 && \mbox{ if } u_{i-1}^{(t)} + u_i^{(t)} > 0 \\
+                        & 0 && \mbox{ if } u_{i-1}^{(t)} + u_i^{(t)} \le 0
+                    \end{aligned} \right. \\
+       b_i^{(t)} &= \left\{ \begin{aligned}
+                        & 1 && \mbox{ if } u_{i-1}^{(t)} + u_i^{(t)} > 0
+                            \mbox{ and } u_i^{(t)} + u_{i+1}^{(t)} > 0 \\
+                        & -1 && \mbox{ if } u_{i-1}^{(t)} + u_i^{(t)} \le 0
+                            \mbox{ and } u_i^{(t)} + u_{i+1}^{(t)} \le 0 \\
+                        & 0 && \mbox{ otherwise }
+                    \end{aligned} \right. \\
+       c_i^{(t)} &= \left\{ \begin{aligned}
+                        & 1 && \mbox{ if } u_i^{(t)} + u_{i+1}^{(t)} \le 0 \\
+                        & 0 && \mbox{ if } u_i^{(t)} + u_{i+1}^{(t)} > 0
+                            \quad .
+                    \end{aligned} \right.
+    \end{split} \]
+    
+    We compute the transition probabilities using (\ref{trans}), choosing
+    the absorption probability to be 0 at $t<m$, and 1 at $t=m$.  We get the
+    transition probability matrix
+    \[ \mathbf{P} =
+    \begin{bmatrix}
+    0 & P_1 &        &         & 0 \\
+      & 0   & \ddots &         & 0 \\
+      &     & \ddots & P_{m-1} & 0 \\
+      &     &        & 0       & 1 \\
+    0 & 0   & 0      & 0       & 1
+    \end{bmatrix} , \]
+    where the last row and column correspond to the final exit state,
+    and each $P_t$ is an $n$ by $n$ tri-diagonal matrix.  We note that
+    following this transition probability matrix, each step of a random
+    walk goes one time step forward.  At the next step, a random walk
+    either stays at the same mesh-point, or goes to its left or right
+    neighbor, with probabilities specified by $P_t$ at the current
+    time step.  Therefore, in our Monte Carlo method, the spatial
+    distribution of the random walks follows transition probabilities
+    $P_t$ at each time step, and all random walks are absorbed at the
+    $m$th time step.  This is consistent to the finite length of a
+    Neumann series associated with the matrix $A$.
+    
+    Assume that we are interested in solving for the adjoint solution at
+    the first time step $\psi^{(1)}$, we can approximate it by starting
+    $q$ random walks from each of the $n$ mesh-points at the first
+    time step.  Denote $\alpha[p,i]$ as the $p$th random walk starting at
+    mesh-point $i$, and $\alpha_t[p,i]$ its position at time step $t$.
+    The Monte Carlo algorithm in this case is
+    
+    \vspace{3mm}\hspace{-12mm}
+    \framebox{ \begin{minipage}{6in} \vspace{2mm}
+    \begin{enumerate}
+    \item For each $1\le p\le q, 1\le i\le n$, choose $\alpha_0[p,i] = x$
+          and initialize
+          \[ W[p,i] = 1 \;; \quad D[p,i] = b_i .
+          \]
+          Then start from $t=1$, do step 2-4, until done with the last
+          time step $t=m$.
+    \item Solve the original problem at time step $t$ for $u^{(t)}$.
+          Compute tri-diagonal matrix $-J_{t+1\, t}^T$ using (\ref{burgerR}),
+          and transition probabilities $P_t$ at this time step using
+          (\ref{trans}).
+    \item For each random walk, choose its next state $\alpha_{t+1}[p]$
+          according to $P_t$. Update
+          \[ W[p,i] = W[p,i] w_{\alpha_t[p,i] \alpha_{t+1}[p,i]}   \;; \quad
+              D[p,i] = D[p,i] + W[p,i] b_{\alpha_{t+1}[p,i]} .
+          \]
+    \item Let $t = t+1$, if $t<m$, go to step 2.
+    \item At last time step $m$, all random walks are absorbed.  Compute the
+          sample mean of the estimators $\frac1q \sum_{p=1}^q D[p,i]$ for
+          each $i$, which is our approximation to $\psi_i^{(1)}$.
+    \end{enumerate}
+    \vspace{1mm} \end{minipage} }
+    \vspace{3mm}
+
+
+
+
+
+\section{Numerical Experiments}
+    In this section, we use three numerical experiments to demonstrate
+    the convergence property and scaling efficiency of our Monte Carlo
+    adjoint solver as well as its performance in solving an inverse
+    problem.  These experiments are done with Burgers' equation,
+    discretized with numerical scheme (\ref{expG}).  Because we used an
+    explicit temporal discretization scheme for the original problem,
+    we use no preconditioning in the Monte Carlo algorithm (see section 4.4).
+    The transition probabilities and birth probabilities are chosen based
+    on (\ref{trans}) and (\ref{birth}).  The absorption probabilities are
+    chosen to be 1 at the last time step, and 0 at other time steps except
+    at boundaries.  All experiments are done on a desktop with two Intel(R)
+    Xeon(TM) 3.00GHz CPUs, 2GB memory, GNU/Linux 2.6.9-42.0.10.ELsmp.
+    
+
+
+    \subsection{Convergence of Monte Carlo adjoint solver}
+        This experiment demonstrates that the Monte Carlo adjoint solution
+        converges to the exact solution as the number of random walk increases.
+        We solve the Burgers' equation with initial condition
+        \begin{equation} \label{exp1init}
+            u(x, 0) = \sin(\pi x),
+            \qquad x \in [0, 1]
+        \end{equation}
+        in time interval $[0, 0.25]$.  First-order up-winding finite volume
+        scheme is used on 100 grid points uniformly space on $[0, 1]$; the
+        CFL number for time integration is set to 0.5.  On the other hand,
+        the adjoint equation is solved with final condition
+        \begin{equation} \label{exp1adj}
+            \phi(x, 0.25) = \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right),
+            \qquad x \in [0, 1]
+        \end{equation}
+        in the same time interval $[0, 0.25]$, where $\mu = 0.5$ and
+        $\sigma = 0.2$.  Both Burgers' equation and the adjoint equation
+        use zero Dirichlet boundary condition.
+
+        Our Monte Carlo adjoint solver is used in four different settings.
+        In each setting, the number of random walks starting from each grid
+        point is respectively 1, 10, 100 and 1000.  Griewank's checkpointing
+        adjoint solver is used to compute the exact adjoint solution.  Figure
+        \ref{exp1fig} plots the Monte Carlo adjoint equation in each of the
+        four cases on top of the exact solution. The Monte Carlo adjoint
+        solution clearly converges towards the exact solution as the number
+        of random walks increases.
+        
+        \begin{figure}[htp] \center
+            \includegraphics[width=6.5in, height=4.5in]
+                {output_m005/EXTRAS/adjoints.png}
+            \caption{ \label{exp1fig} Solutions of adjoint equation at time 0.
+            Solid lines are solutions estimated by Monte Carlo method; dash
+            lines are the exact solution.  The number of random walks starting
+            from each grid point is: top-left plot: 1; top-right plot: 10;
+            bottom-left plot: 100; bottom-right plot: 1000.}
+        \end{figure}
+
+        The rate of this convergence is depicted in figure \ref{exp1fig2}.
+        The slope of the line in the log-log plot is roughly 0.5,
+        indicating that our Monte Carlo adjoint solver converges at a
+        rate of $\sqrt{q}$, which is the common rate of convergence in
+        Monte Carlo methods.
+
+        \begin{figure}[htp] \center
+            \includegraphics[width=3in, height=2.5in]
+                {output_m005/EXTRAS/convergence.png}
+            \caption{ \label{exp1fig2} Convergence of Monte Carlo adjoint
+            solution.  The horizontal axis is $q$, the number of random
+            walks starting from each grid points; the vertical axis is
+            the $L^2$ distance between Monte Carlo adjoint solution and
+            the exact solution.}
+        \end{figure}
+
+
+
+    \subsection{Scaling efficiency}
+        By avoiding trajectory storage and re-iteration, our Monte Carlo
+        adjoint solver is especially competitive to exact solution methods
+        when the number of time steps is large. This efficiency is demonstrated
+        by this experiment.
+
+        In this experiment, the Burgers' equation is solved in time interval
+        $[0, 0.25]$ with uniform grids of 10 different sizes, ranging
+        from 10 to 10000.  The CFL number for time integration is set to 0.5,
+        thus the number of time steps increases proportionally to the grid size.
+        Similar to the first experiment, the initial condition for Burgers'
+        equation is (\ref{exp1init}); the numerical scheme used is first-order
+        up-winding finite volume. Again, we solve the adjoint equation in time
+        interval $[0, 0.25]$ using both our Monte Carlo solver and Griewank's
+        optimal checkpointing scheme. Two different settings, with $q=1$ and
+        $q=10$ respectively, are used in the Monte Carlo solver. We then
+        compare the time it takes using our Monte Carlo method in both settings
+        to the time it takes using the optimal checkpointing scheme.
+        
+        \begin{figure}[htp] \center
+            \includegraphics[width=4.5in, height=3.5in]
+                {output_m006/EXTRAS/time.png}
+            \caption{ \label{exp2fig} The computation time of the adjoint
+            solution as grid size increases.  The dash line is the amount of
+            time it takes to compute the exact adjoint solution using
+            Griewank's optimal checkpointing scheme; the solid line above
+            it is the amount time it takes to estimate the adjoint solution
+            using Monte Carlo method using $q=10$ random walks per grid point;
+            the solid line below is the amount of time it takes to estimate
+            the adjoint solution using Monte Carlo method using $q=1$ random
+            walks per grid point.  The calculation is done on a desktop with
+            two Intel(R) Xeon(TM) 3.00GHz CPUs, 2GB memory, GNU/Linux
+            2.6.9-42.0.10.ELsmp.  All calculations are single threaded.}
+        \end{figure}
+
+        From the log-log plot in figure \ref{exp2fig}, we observe that the
+        computation time of our Monte Carlo method in both settings is
+        proportional to the square of grid size.  This is because with fixed
+        CFL number, the number of time steps grow linearly to the grid size,
+        and the computational time is proportional to the product of the grid
+        size and the number of time steps.  In contrast, the computation time
+        of the optimal checkpointing scheme grows faster, with a theoretical
+        rate of $n^2 \log n$, where $n$ is the grid size.
+
+        This scaling efficiency of our Monte Carlo method is obtained without
+        sacrificing the accuracy of its estimated solution.  Figure
+        \ref{exp2fig2} shows the $L^2$ distance between the Monte Carlo
+        adjoint solution and the exact solution for different grid sizes.
+        As the grid size and number of time steps increases, the quality
+        of the Monte Carlo adjoint solution increases for a fixed number
+        of random walks per grid point.  This result indicates that when the
+        computation upscales as the spatial and temporal resolution increases,
+        our Monte Carlo is more computationally efficient and produces more
+        accurate estimated adjoint solution.
+
+        \begin{figure}[htp] \center
+            \includegraphics[width=4.5in, height=3.5in]
+                {output_m006/EXTRAS/error.png}
+            \caption{ \label{exp2fig2} $L^2$ estimation error of the Monte
+            Carlo adjoint solver.  The top line is the error for $q=1$ random
+            walks per grid point; the bottom line is the error for $q=10$
+            random walks per grid point.}
+        \end{figure}
+
+
+ 
+    \subsection{A Monte Carlo adjoint driven inverse problem}
+        In this experiment, we test the performance of our Monte Carlo adjoint
+        solver in solving a simple inverse problem: finding the initial
+        condition of a Burgers' equation so that the solution at time $T=0.25$
+        matches a prescribed target function
+        \[ f_t(x) = \exp\left(-\frac{(x-\mu)^2}{\sigma^2}\right),
+           \qquad x \in [0, 1],
+        \]
+        where $\mu = 0.5$ and $\sigma = 0.2$.  The boundary condition is
+        zero Dirichlet at both $x=0$ and $x=1$.
+
+        We solve the Burgers' equation using first-order up-winding finite
+        volume scheme on 100 uniformly spaced grid points; the CFL number
+        is set to 0.5.  The adjoint solution is obtained by our Monte Carlo
+        adjoint solver; the number of random walk starting from each grid
+        point $q$ is set to 1.  This adjoint solution is used to drive a
+        gradient based optimization procedure to minimizes the square $L^2$
+        difference between the solution at $T$ and the prescribed function
+        $f_t$.  In this experiment, we use the BFGS quasi-Newton algorithm
+        provided by Python module scipy.optimize.  The initial guess fed
+        into the optimization routine is $f_t$.
+        
+        Due to insufficient precision of the gradient, calculated from the
+        Monte Carlo adjoint solution, the optimization procedure terminated
+        after 28 iterations without reaching its default error tolerance.
+        The result of this optimization procedure and the corresponding
+        solution at $T$ is plotted in figure \ref{exp3fig1}.  For the
+        purpose of comparison, a fully converged solution at iteration 68
+        driven by the exact adjoint solution is plotted in figure
+        \ref{exp3fig2}.  Despite the wiggling fluctuations on the solution
+        using Monte Carlo adjoint solver, it captures the shape of the
+        solution.  The corresponding Burgers' solution at $T$ is also close
+        to the target function.  Moreover, the objective function, the square
+        $L^2$ distance to the target function is $2.4\times 10^{-4}$, more
+        than 2 orders of magnitude smaller than that of the initial guess,
+        which is $7.5\times 10^{-2}$.  This result indicates that the
+        Monte Carlo adjoint solution, being an approximation itself, is
+        useful in obtaining an approximate solution of optimization and
+        inverse problems.  The accuracy of the adjoint solution limits the
+        accuracy of the computed gradient, preventing full convergence
+        of gradient based optimization procedures.
+
+        \begin{figure}[htp] \center
+            \includegraphics[width=4.5in, height=3.5in]
+                {output_m007/EXTRAS/mcadj.png}
+            \caption{ \label{exp3fig1} Solving an inverse problem using
+            Monte Carlo adjoint solver.  The solid line is the solution to
+            the inverse problem after 28 BFGS iterations.  The dash line
+            is the solution at time $T$ of the Burgers' equation with the
+            solid line as its initial condition.  The dot line is the target
+            function $f_t$.  The dash line and dot line being close means
+            that the solid line is an approximate solution to the inverse
+            problem.}
+        \end{figure}
+
+        \begin{figure}[htp] \center
+            \includegraphics[width=4.5in, height=3.5in]
+                {output_m007/EXTRAS/cpadj.png}
+            \caption{ \label{exp3fig2} Solving the same inverse problem using
+            exact adjoint solution.  The solid line is the solution to
+            the inverse problem after 68 BFGS iterations (fully converged.)
+            The dash line is the solution at time $T$ of the Burgers' equation
+            with the solid line as its initial condition.  The dot line is the
+            target function $f_t$.  The dash line and dot line lying on top
+            of each other means that the solid line is an accurate solution
+            of the inverse problem.}
+        \end{figure}
+
+        Better convergence can be obtained if a smoothed version of the
+        Monte Carlo adjoint solution is used to calculate the gradient.
+        Figure \ref{exp3fig3} shows the solution of the same inverse problem
+        driven by Monte Carlo adjoint solutions smoothed by a Gaussian filter.
+        The number of random walks starting from each grid point $q$ is still
+        set to 1.  The $sigma$ of the Gaussian filter is 0.03.  This time
+        the optimization routine terminates after 58 iterations.  Although
+        the default error tolerance is still not reached, the quality of the
+        solution is significantly improved.  The final objective function,
+        $3.2\times 10^{-5}$, is also an order of magnitude smaller than the
+        final objective function of the non-smoothed case.
+
+        \begin{figure}[htp] \center
+            \includegraphics[width=4.5in, height=3.5in]
+                {output_m007/EXTRAS/mcadj_smooth.png}
+            \caption{ \label{exp3fig3} Solving an inverse problem using
+            smoothed Monte Carlo adjoint solver.  The solid line is the
+            solution to the inverse problem after 57 BFGS iterations.  The
+            dash line is the solution at time $T$ of the Burgers' equation
+            with the solid line as its initial condition.  The dot line is
+            the target function $f_t$.  The dash line and dot line being
+            almost on top of each other means that the solid line is an
+            accurate approximate solution to the inverse problem.}
+        \end{figure}
+
+        This experiment concludes that despite being less accurate than
+        the exact solution, the Monte Carlo adjoint is capable of reducing
+        the objective function in optimization and inverse problems.
+        In some practical problems where the Monte Carlo adjoint solver is
+        more computationally efficient, it may be desirable to use the Monte
+        Carlo adjoint solution to drive the optimization until further
+        improvement is limited by its accuracy, then switch to an exact
+        adjoint solver to ensure full convergence.
+
+
+
+
+
+\section{Future Work}
+    The $O(\sqrt{n})$ convergence rate of the Monte Carlo method
+    (\ref{proberr}) makes it unattractive when the variance of the estimator
+    $D$ is high.  This is the case when we apply our method to vector
+    transport equations such as Navier Stokes equations.  Therefore, our
+    future work focuses on reducing the variance of our estimator.
+    \begin{enumerate}
+    \item The variance of our estimator may be reduced by trying more
+          advanced preconditioners \cite{Tan2002,Srinivasan2003}, which can
+          improve the convergence of the Neumann series.  We are particular
+          interested in investigating preconditioners in the case of vector
+          partial differential equations, such as Navier-Stokes equation.
+    \item We are interested in investigating Monte Carlo methods that are not
+          based on the Neumann series.  These methods are especially useful
+          in case the Neumann series have poor convergence.
+    \end{enumerate}
+    Our ultimate goal is to use this method in large simulations of physical
+    systems, such as aerodynamic simulations, turbulence simulations and
+    fluid-structure coupled simulations.
+
+
+
+
+
+\section{Conclusion}
+    The Monte Carlo method is an efficient method to approximate the solution
+    of the adjoint equation. The biggest advantages of this method are
+    \begin{enumerate}
+        \item By only advancing forward in time, it avoids storing the full
+              trajectory or iterating the original problem.
+        \item It is easy to compute only part of the adjoint solution, or a
+              linear function of the solution. This saves computation time
+              in practice.
+        \item It is conceptually easy to parallelize.
+    \end{enumerate}
+    As we have demonstrated through our numerical experiments, our Monte
+    Carlo method has better scaling efficiency than exact solution methods.
+    By sacrificing some accuracy, choosing Monte Carlo adjoint solver in
+    large scale calculations can be rewarding in terms of computation time
+    and memory usage.  This has been demonstrated in Burgers' equation.
+    If this method can be efficiently generalized to vector transport
+    equations, it will make very large scale calculation of their adjoint
+    equations feasible.
+
+
+
+    \vspace{8mm}
+    \noindent This work is supported by U.S. Department of Energy's ASC
+              Program at Stanford.
+
+
+
+\bibliography{monte}
+
+\end{document}

@@ -1,0 +1,47 @@
+Uncertainty quantification of numerical simulations has raised significant
+interest in recent years.  One of the main challenges remains the
+efficiency in propagating uncertainties from the sources
+to the quantities of interest, especially when there are many sources of
+uncertainties.  The traditional Monte Carlo methods
+converge slowly and are undesirable when the required accuracy is high.
+Most modern uncertainty propagation methods such as polynomial chaos and
+collocation methods, although extremely efficient, suffer from the so called
+``curse of dimensionality''.
+The computational resources required for these methods grow exponentially
+as the number of uncertainty sources increases.
+
+The aim of this work is to address the challenge of efficiently propagating
+uncertainties in numerical simulations with many sources of uncertainties.
+Because of the large amount of information that can be obtained from
+adjoint solutions, we focus on using adjoint
+equations to propagate uncertainties more efficiently.
+
+Unsteady fluid flow simulations are the main application of this work, although
+the uncertainty propagation methods we discuss are applicable to other
+numerical simulations.  We first discuss how to solve the adjoint equations
+for time-dependent fluid flow equations.  We specifically address the challenge
+associated with the backward time advance of the adjoint equation,
+requiring the solution
+of the primal equation in backward order.  Two methods are proposed to
+address this challenge.  The first method solves
+the adjoint equation forward in time, completely eliminating the need for
+storing the solution of the primal equation.  The other method is
+a checkpointing algorithm specifically designed for dynamic time-stepping.
+The adjoint equation is still solved backward in time, but the present
+scheme retrieves the primal solution in reverse order.
+This checkpointing method is applied to an incompressible Navier-Stokes
+adjoint solver on unstructured mesh.
+
+With the adjoint equation solved, we obtain a linear approximation of
+the quantities of interest as functions of the random variables describing
+the uncertainty sources in a probabilistic setting.
+We use this linear approximation to accelerate
+the convergence of the Monte Carlo method in calculating tail probabilities
+for estimating margins and risk.  In addition, we developed a
+multi-variate interpolation scheme that uses multiple adjoint solutions
+to construct an interpolant of the quantities of interest as functions of
+the uncertainty sources.  This interpolation scheme converge
+exponentially to the true function, thus providing very accurate and efficient
+means of propagating of uncertainties and remains accurate independently of
+the locations of the available data.
+

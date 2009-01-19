@@ -1,0 +1,10 @@
+Import('env')
+
+src = ['Trajectory.cpp', 'TrajBoostPython.cpp']
+static_lib = env.StaticLibrary('trajectory', src)
+python_lib = env.SharedLibrary('trajectory', src, SHLIBPREFIX='')
+libs = (static_lib, python_lib)
+
+SConscript('unit_test/SConstruct')
+
+Return('libs')

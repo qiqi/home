@@ -1,0 +1,182 @@
+\chapter*{Appendix A\\The discrete adjoint scheme}
+\addcontentsline{toc}{chapter}{Appendix A $\,$ The discrete adjoint scheme}
+
+\renewcommand{\theequation}{A.\arabic{equation}}
+\setcounter{equation}{0}
+
+The scheme for solving the unsteady incompressible Navier-Stokes equation in
+the CDP flow solver is
+\begin{equation} \begin{split} \label{nsscheme}
+   & u_m^{k*} = 2 u_m^{k-1} - u_m^{k-2} \\
+   & u^{k-\frac23} = \frac43 u^{k-1} - \frac13 u^{k-2}\\
+   & \frac32 \frac{u^{k*} - u^{k-\frac23}}{\Delta t} =
+ - u_m^{k*} \cdot \nabla u^{k*} + \nabla \cdot \mu \nabla u^{k*}
+ - \nabla p^{k-1} \\
+   & u^{k-} = u^{k*} + \frac{2 \Delta t}{3} \nabla p^{k-1} \\
+   & \Delta p^k = \frac3{2 \Delta t} \nabla \cdot u^{k-} \\
+   & u^k = u^{k-} - \frac{2 \Delta t}{3} \nabla p^k \\
+   & u_m^k = P_F\, u^{k-} - \frac{2\Delta t}{3} \nabla_F\, p^k \;.
+\end{split} \end{equation}
+We have five state variables in the scheme:
+$u^k, u^{k-1}, u_m^k, u_m^{k-1}, p^k$.
+$\Delta t$ is the size of the time step.  The convection operator
+$u_m \cdot \nabla$, the gradient operators $\nabla$,
+the divergence operator $\nabla\cdot$, the Laplace operator $\Delta$, the
+facial gradient operator $\nabla_F$, and the facial projection operator
+$P_F$ are all in the Simplex-Superposition formulation \cite[]{ss}.
+
+The tangent linear scheme corresponding to the Navier-Stokes scheme is
+\begin{equation} \begin{split} \label{tangentscheme}
+ &  \delta u_m^{k*} = 2 \delta u_m^{k-1} - \delta u_m^{k-2} \\
+ &  \delta u^{k-\frac23} = \frac43 \delta u^{k-1} - \frac13 \delta u^{k-2} \\
+ &  \frac32 \frac{\delta u^{k*} - \delta u^{k-\frac23}}{\Delta t} =
+ - u_m^{k*} \cdot \nabla \delta u^{k*} - \delta u_m^{k*} \cdot \nabla u^{k*}
+ + \nabla \cdot \mu \nabla \delta u^{k*} - \nabla \delta p^{k-1} \\
+ & \delta u^{k-} = \delta u^{k*} + \frac{2 \Delta t}{3} \nabla \delta p^{k-1} \\
+ & \Delta \delta p^k = \frac{3}{2 \Delta t} \nabla \cdot \delta u^{k-} \\
+ & \delta u^k = \delta u^{k-} - \frac{2 \Delta t}{3} \nabla \delta p^k \\
+ & \delta u_m^k = P_F\, u^{k-} - \frac{2\Delta t}{3} \nabla_F\, \delta p^k \;,
+\end{split} \end{equation}
+where $\delta u^k, \delta u^{k-1}, \delta u_m^k, \delta u_m^{k-1}, \delta p^k$
+are the tangent linear state variables.  The only difference from the
+Navier-Stokes scheme is in the scheme is the convection operator, which is
+linearized into two convection operators.
+
+With this tangent linear scheme, we derive the adjoint scheme of this
+tangent linear scheme
+\begin{equation} \begin{split} \label{adjscheme}
+ & \Delta q^k = \frac{\hat p^k + \nabla \cdot \hat u^k}{\Delta t} +
+                \nabla_F \cdot \hat u_m^{k*} \\
+ & \hat u^{k-} = \hat u^k + \Delta t \left( P_N\,\hat u_m^{k*} -
+                                            \nabla q^k \right) \\
+ & \frac 32 \frac{\hat u^{k-\frac23} - \hat u^{k-}}{\Delta t} =
+   u_m^{k*} \cdot \nabla \hat u^{k-\frac23}
+ + \nabla \cdot \mu \nabla \hat u^{k-\frac23} \\
+ & \hat u^{k-1} = \frac43 \hat u^{k-\frac23} - \frac13 \hat u^{k+\frac13} \\
+ & \hat u_m^{k} = -\frac23\, \nabla u^{k*} \cdot \hat u^{k-\frac23} \\
+ & \hat p^{k-1} = \nabla \cdot \left(\hat u^{k-\frac23} - \hat u^{k-}\right) \\
+ & \hat u_m^{k-1*} = 2 \hat u_m^{k} - \hat u_m^{k+1} \;,
+\end{split} \end{equation}
+where ${\hat u}^k, {\hat u}^{k-1}, {\hat u}_m^k, {\hat u}_m^{k-1}, {\hat p}^k$
+are the adjoint state variables.  The Laplace operator $\Delta$ is self-adjoint,
+so it is the adjoint of the Laplace operator in the tangent linear scheme.
+The divergence operator $\nabla\cdot$ is the adjoint operator of the
+gradient operator $\nabla$ in the tangent linear scheme, while the gradient
+operator $\nabla$ is the adjoint operator of the divergence operator.
+The facial to nodal divergence operator $\nabla_F\cdot$ is the adjoint
+operator of the facial gradient operator $\nabla_F$.  The facial to nodal
+projection $P_N$ is the adjoint operator to the nodal to facial projection
+$P_F$.  The convection operator $u_m \cdot \nabla$ is adjoint to the negative
+of itself.
+
+This discrete adjoint scheme (\ref{adjscheme}) and the tangent linear
+Navier-Stokes schemes (\ref{tangentscheme}) satisfy the discrete adjoint
+relation:
+\begin{equation} \begin{split} \label{adjcondition}
+   \iiint & \delta u^k \cdot \hat u^k -
+   \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} + \\
+ & \Delta t \left( \delta u_m^k \cdot \hat u_m^{k*} -
+                   \delta u_m^{k-1} \cdot \hat u_m^{k+1} +
+                   \frac23\, \delta p^k \hat p^k \right) dx \\
+ = \iiint & \delta u^{k-1} \cdot \hat u^{k-1} -
+    \frac13\, \delta u^{k-2} \cdot \hat u^{k-\frac23} + \\
+ &  \Delta t \left( \delta u_m^{k-1} \cdot \hat u_m^{k-1*} -
+                    \delta u_m^{k-2} \cdot \hat u_m^k
+                 + \frac23\, \delta p^{k-1} \hat p^{k-1} \right) dx \;.
+\end{split} \end{equation}
+The following algebraic manipulations of the 
+discrete adjoint scheme (\ref{adjscheme}) and the tangent linear
+Navier-Stokes schemes (\ref{tangentscheme}) proves this discrete adjoint
+relation.
+\[\begin{split}
+   \iiint & \delta u^k \cdot \hat u^k -
+   \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} +
+   \Delta t \left( \delta u_m^k \cdot \hat u_m^{k*} -
+                   \delta u_m^{k-1} \cdot \hat u_m^{k+1} +
+                   \frac23\, \delta p^k \hat p^k \right) dx \\
+ =  \iiint & \left(\delta u^{k-} - \frac{2 \Delta t}3 \nabla \delta p^k\right)
+            \cdot \hat u^k
+  + \Delta t \left(P_F\, u^{k-} - \frac{2\Delta t}3 \nabla_F\, \delta p^k\right)
+              \cdot \hat u_m^{k*}
+  + \frac{2\Delta t}{3}\, \delta p^k \hat p^k \\
+ &- \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t \delta u_m^{k-1} \cdot \hat u_m^{k+1} dx \\
+ =  \iiint & \delta u^{k-} \cdot
+    \left(\hat u^k + \Delta t\, P_N\, \hat u_m^{k*}\right)
+  + \frac{2\Delta t}3\, \delta p^k
+    \left( \nabla \cdot \hat u^k + \Delta t \nabla_F \cdot \hat u_m^{k*}
+         + \hat p^k \right) \\
+ &- \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \delta u^{k-} \cdot
+    \left(\hat u^k + \Delta t\, P_N\, \hat u_m^{k*}\right)
+  + \frac{2\Delta t^2}3\, \delta p^k\, \Delta q^k
+  - \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} \\
+ &- \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \delta u^{k-} \cdot
+    \left(\hat u^k + \Delta t\, P_N\, \hat u_m^{k*}\right)
+  + \frac{2\Delta t^2}3\, \Delta \delta p^k\, q^k
+  - \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} \\
+ &- \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \delta u^{k-} \cdot
+    \left(\hat u^k + \Delta t\, P_N\, \hat u_m^{k*}\right)
+  + \Delta t\, \nabla \cdot \delta u^{k-}\, q^k
+  - \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} \\
+ &- \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \delta u^{k-} \cdot
+    \left(\hat u^k + \Delta t\, P_N\, \hat u_m^{k*}
+     - \Delta t\, \nabla q^k \right)
+  - \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \left(\delta u^{k*}
+    + \frac{2 \Delta t}{3} \nabla \delta p^{k-1}\right) \cdot \hat u^{k-}
+  - \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \delta u^{k*} \cdot \left( \hat u^{k-\frac23} - \frac{2\Delta t}3 
+    \left(u_m^{k*} \cdot \nabla \hat u^{k-\frac23}
+    + \nabla \cdot \mu \nabla \hat u^{k-\frac23}\right) \right)
+  - \frac{2 \Delta t}{3}\, \delta p^{k-1} \nabla \cdot \hat u^{k-} \\
+ &- \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \left( \delta u^{k*} + \frac{2\Delta t}3 
+    \left(u_m^{k*} \cdot \nabla \delta u^{k*}
+    - \nabla \cdot \mu \nabla \delta u^{k*}\right) \right) \cdot
+    \hat u^{k-\frac23}
+  - \frac{2 \Delta t}{3}\, \delta p^{k-1} \nabla \cdot \hat u^{k-} \\
+ &- \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \left( \delta u^{k-\frac23} - \frac{2\Delta t}3 
+    \left(\delta u_m^{k*} \cdot \nabla u^{k*}
+    + \nabla \delta p^{k-1}\right) \right) \cdot \hat u^{k-\frac23}
+  - \frac{2 \Delta t}{3}\, \delta p^{k-1} \nabla \cdot \hat u^{k-} \\
+ &- \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+\end{split} \]
+
+\[ \begin{split}
+ =  \iiint & \delta u^{k-\frac23} \cdot \hat u^{k-\frac23}
+  + \Delta t\, \delta u_m^{k*} \cdot \hat u_m^k
+  + \frac{2\Delta t}3\, \delta p^{k-1} \nabla \cdot \hat u^{k-\frac23}
+  - \frac{2 \Delta t}3\, \delta p^{k-1} \nabla \cdot \hat u^{k-} \\
+ &- \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint & \left( \frac43 \delta u^{k-1} - \frac13 u^{k-2} \right)
+            \cdot \hat u^{k-\frac23}
+  + \Delta t\, \left(2 \delta u_m^{k-1} - \delta u_m^{k-2}\right)
+               \cdot \hat u_m^k \\
+ &+ \frac{2\Delta t}3\, \delta p^{k-1} \nabla \cdot
+    \left( \hat u^{k-\frac23} - \hat u^{k-} \right)
+  - \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13}
+  - \Delta t\, \delta u_m^{k-1} \cdot \hat u_m^{k+1}\; dx \\
+ =  \iiint &  \delta u^{k-1} \cdot \left( \frac43 \hat u^{k-\frac23}
+                                    - \frac13 \hat u^{k+\frac13} \right)
+  - \frac13\, u^{k-2} \cdot \hat u^{k-\frac23}
+  + \Delta t\, u_m^{k-1} \cdot \left(2 \hat u_m^k - \hat u_m^{k+1} \right) \\
+ &- \Delta t\, \delta u_m^{k-2} \cdot \hat u_m^k
+  + \frac{2\Delta t}3\, \delta p^{k-1} \hat p^{k-1}\; dx \\
+ =  \iiint & \delta u^{k-1} \cdot \hat u^{k-1} -
+    \frac13\, \delta u^{k-2} \cdot \hat u^{k-\frac23} \\
+ &+ \Delta t \left( \delta u_m^{k-1} \cdot \hat u_m^{k-1*} -
+                    \delta u_m^{k-2} \cdot \hat u_m^k
+                 + \frac23\, \delta p^{k-1} \hat p^{k-1} \right) dx \;.
+\end{split}\]

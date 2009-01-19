@@ -1,0 +1,10 @@
+import os
+
+Import('env')
+
+dev_root = '../../../..'
+
+exe = env.Program('unit_test_trajectory', 'unit_test.cpp', LIBS='trajectory', \
+                  LIBPATH=os.path.join(dev_root, 'lib/wangq'))
+Install(os.path.join(dev_root, 'bin/unit_tests'), exe)
+

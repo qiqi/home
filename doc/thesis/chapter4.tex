@@ -1,0 +1,848 @@
+\chapter[An Unsteady Adjoint Navier-Stokes Solver]
+        {An Unsteady Adjoint Solver for the Navier-Stokes Equations}
+
+\section{Mathematical formulation of the adjoint equations}
+
+This section derives the adjoint equation and the adjoint sensitivity gradient
+by linearizing the objective functions and the constraints.  Section 
+\ref{s:adj_general} treats the most general scenario,
+section \ref{s:adj_unsteady} discusses the case when the constraint is a
+time-dependent equation, and section \ref{s:adj_ns} derives the adjoint
+equation and sensitivity gradient when the constraint is the unsteady
+Navier-Stokes equations, and the objective function is a time-averaged
+aerodynamic quantity.
+
+\subsection{General adjoint sensitivity gradient} \label{s:adj_general}
+
+Let $\xi$ in a Hilbert space $\Phi$ be the random variables that describes
+the sources of uncertainty.  Define the objective function as
+$${\bf J}(v,\xi) \in R.$$
+The state $v$ is in a Banach space $\bf V$ and satisfies the constraint
+$${\bf G}(v,\xi) = 0,$$
+where $\bf G: {\bf V} \times \Phi \rightarrow {\bf V}$ is a general nonlinear
+operator.  The constraint uniquely determines a state $v$ for any given control
+variable $\xi$.
+
+Let $\xi_0 \in \Phi$ and $v_0 \in {\bf V}$ satisfy the constraint
+$${\bf G}(v_0,\xi_0) = 0.$$
+Let $\xi \in \Phi$ and $v \in {\bf V}$ also satisfy the constraint, and
+both $\delta\xi = \xi - \xi_0$ and $\delta v = v - v_0$ be infinitesimal.
+Then $\delta\xi$ and $\delta v$ satisfy the linearized
+constraint
+$$ {\bf L}\, \delta v + {\bf M} \delta \xi =
+   {\bf G}(v_0+\delta v, \xi_0+\delta \xi) - {\bf G}(v_0, \xi_0) = 0 $$
+where linear operators ${\bf L}: {\bf V} \rightarrow {\bf V}$ and
+${\bf M}: \Phi \rightarrow {\bf V}$ are defined as
+$$ {\bf L} = \frac{\partial {\bf G}}{\partial v},\quad
+   {\bf M} = \frac{\partial {\bf G}}{\partial \xi} \quad
+   \mbox{ at } (v_0, \xi_0). $$
+On the other hand, the objective function can be linearized as
+$$ {\bf J}(v,\xi) = {\bf J}(v_0,\xi_0)
+   + \langle\nabla_{\xi}\, {\bf J},\;\delta\xi\rangle
+   + \langle\nabla_v\, {\bf J},\;\delta v\rangle $$
+$\nabla_{\xi}\, {\bf J} \in {\bf V}^*$ and $\nabla_v\, {\bf J} \in \Phi$
+are Frechet derivatives of $\bf J$ at the linearizing point $(\xi_0,v_0)$.
+
+Now let $\hat{v} \in {\bf V}^*$ satisfy the adjoint equation
+$${\bf L}^* \hat{v} = \nabla_v\, {\bf J},$$
+where $\bf L^*$ is the adjoint operator of the linear operator $\bf L$, then
+$$ \langle\nabla_v\, {\bf J},\;\delta v\rangle
+ = \langle {\bf L}^* \hat{v},\;\delta v\rangle
+ = \langle \hat{v},\; {\bf L}\, \delta v\rangle
+ = -\langle \hat{v},\; {\bf M} \delta \xi\rangle
+ = -\langle {\bf M}^* \hat{v},\; \delta \xi\rangle $$
+and the objective function can be written as
+$$ {\bf J}(v,\xi) = {\bf J}(v_0,\xi_0)
+ + \langle\nabla_{\xi}\, {\bf J} - {\bf M}^*\hat{v},\;\delta\xi\rangle \;.$$
+Using this adjoint method, the sensitivity gradient of the objective
+function becomes
+\begin{equation} \label{sensitivity_steady}
+  \left.\frac{D {\bf J}}{D\xi}\right|_{\xi_0}
+ = \nabla_{\xi}\, {\bf J} - {\bf M}^*\hat{v} \;,
+\end{equation}
+which can be calculated by one adjoint solution.
+
+
+
+\subsection{Adjoint sensitivity gradient for unsteady problems}
+\label{s:adj_unsteady}
+
+In unsteady problems, the state variable $v$ has an additional time dimension.
+i.e., the space of all possible $v$'s can be written as
+$$ {\bf V} = {\mathcal V}^{\,[\,0,T]} \;,$$
+where $\mathcal V$ is a Banach space.  We call it the ``spatial'' dimension,
+as opposed to the temporal dimension.
+We denote $v(t) \in {\mathcal V}$ as the state at time $t$.
+The norm of $v$ in $\bf V$ should be defined as the supremum of
+the norm of $v(t)$ in $\mathcal V$ over $0\le t\le T$.
+The constraint in an unsteady problem is a set of time-dependent ordinary or
+partial differential equations
+$$ {\bf G}(v,\xi) = \frac{\partial v(t)}{\partial t} + G(v(t),\xi) = 0, \quad
+   0 \le t \le T \;.$$
+In case of a partial differential equation, $G$ is a spatial operator on
+$\mathcal V$, while $\xi$ is a parameter of the operator.  On the other
+hand, the objective function in unsteady problems can usually be written as
+$$ {\bf J}(v,\xi) = \int_0^T J(v(t),\xi;t) \;dt .$$
+In the rest of this chapter, $v(t)$ is simply denoted by the abbreviation
+$v$ for short where no confusion could result.  Similarly, $v_{0\,t}$
+and $\delta v(t)$ are denoted as $v_0$ and $\delta v$.
+
+Let $\xi_0$ and $v_0$ satisfy the constraint
+$$ {\bf G}(v_0,\xi_0) = 0 ,$$
+and both $\delta v = v - v_0$ and $\delta \xi = \xi - \xi_0$ are infinitesimal.
+Linearization of the constraint $\bf G$ around $\xi_0,v_0$ gives
+\begin{equation} \label{constraint_l}
+ {\bf G}(v,\xi) - {\bf G}(v_0,\xi_0)
+ = \frac{\partial\: \delta v}{\partial t} + L(t) \delta v
+                                                + M(t) \delta\xi = 0 \;,
+\end{equation}
+where spatial linear operators $L(t) : {\mathcal V} \rightarrow {\mathcal V}$
+and $M(t) : \Phi \rightarrow {\mathcal V}$ are Frechet derivatives defined as
+$$ L(t) = \frac{\partial G(v, \xi; t)}{\partial v},\quad
+   M(t) = \frac{\partial G(v, \xi; t)}{\partial \xi} \quad
+   \mbox{ at } (v_0, \xi_0) \;.$$
+These operators may depend on time.  On the other hand, linearization of the
+objective function $\bf J$ gives
+\begin{equation} \label{td_obj_diff}
+  {\bf J}(v,\xi) = {\bf J}(v_0,\xi_0)
+ + \int_0^T \left(\langle \nabla_{\xi}\, J, \delta\xi \rangle
+                + \langle \nabla_v J, \delta v \rangle \right) dt \;,
+\end{equation}
+where $\nabla_{\xi}\,J \in \Phi$ and $\nabla_v\,J \in \mathcal{V}^*$ are
+Frechet derivatives of $J$ at $(\xi_0,v_0)$, and the brackets here are
+spatial inner products, i.e., inner products between spaces $\mathcal V^*$ and
+$\mathcal V$.
+
+Now let $\hat v$ satisfy the adjoint equation
+$$ -\frac{\partial {\hat v}}{\partial t} + L^* {\hat v} = \nabla_v\, J \;.$$
+Then
+$$ \int_0^T \langle \nabla_{v}\, J, \delta v \rangle \; dt
+ = - \int_0^T \langle \frac{\partial {\hat v}}{\partial t},
+                      \delta v \rangle \; dt
+   + \int_0^T \langle L^* {\hat v}, \delta v \rangle \; dt \;, $$
+where 
+$$ - \int_0^T \langle \frac{\partial {\hat v}}{\partial t},
+                      \delta v \rangle \; dt
+   = \int_0^T \langle \hat v, \frac{\partial\: {\delta v}}{\partial t}
+              \rangle \; dt $$
+through integration by parts, and
+$$ \int_0^T \langle L^* {\hat v}, \delta v \rangle \; dt
+ = \int_0^T \langle {\hat v}, L\, \delta v \rangle \; dt $$
+through the definition of adjoint operator.  By combining the above three
+equations and incorporating Equation (\ref{constraint_l}), we obtain
+$$ \int_0^T \langle \nabla_{v}\, J, \delta v \rangle \; dt
+ = \int_0^T \langle \hat v, \frac{\partial\: {\delta v}}{\partial t} +
+                            L\, \delta v \rangle \; dt
+ =-\int_0^T \langle \hat v, M\, \delta \xi \rangle \; dt
+ =-\int_0^T \langle M^* \hat v, \delta \xi \rangle \; dt \;.$$
+Incorporating this result into Equation (\ref{td_obj_diff}),
+the objective function can be obtained as
+$$ {\bf J}(v,\xi) = {\bf J}(v_0,\xi_0)
+ + \int_0^T \langle \nabla_{\xi} J - M^* {\hat v}, \delta \xi
+            \rangle\; dt \;.$$
+Therefore, the sensitivity gradient at $\xi_0$ can be calculated by
+\begin{equation} \label{sensitivity_unsteady}
+ \left.\frac{D{\bf J}}{D\xi}\right|_{\xi_0} = 
+ \int_0^T \left(\nabla_{\xi} J - M_t^* {\hat v}\right) dt \;.
+\end{equation}
+Calculating the sensitivity gradient using this equation can be done by
+adding the contribution from each time step of the adjoint solution.
+
+
+
+\subsection{Adjoint analysis for incompressible Navier-Stokes flow}
+\label{s:adj_ns}
+
+In this subsection, we look at deriving the adjoint sensitivity gradient
+for uncertainty quantification problems related to
+incompressible Navier-Stokes flow.  The uncertainties affect
+both the boundaries and the flow in the interior.  The former describe
+The former describes
+uncertain wall roughness, unmodeled object movement / oscillations etc.
+The latter describe numerical uncertainties and subgrid model uncertainties.
+The objective function is assumed to be a measurable aerodynamic quantity, such
+as lift, drag or moment of a solid object in the flowfield, which depends on
+the pressure and viscous stress on the boundary of the solid object.
+The adjoint equations for Navier-Stokes flows have been derived and solved
+by \cite{jameson1988}, \cite{bewley01} and \cite{temam}.
+
+The incompressible unsteady Navier-Stokes and continuity equations with
+normalized density are
+\[ \begin{split}
+    & \frac{\partial v}{\partial t} + v \cdot \nabla v
+        - \nabla \cdot (\mu \nabla v) + \nabla p = f(\xi) \\
+    & \nabla \cdot v = 0 \;,
+\end{split} \]
+in the spatial domain $\Omega$ and time period $[0, T]$.
+The source term $f(\xi)$ depends on $\xi$, the random variables describing
+the sources of uncertainties.
+The initial condition is
+\[ v = u_0, \quad t = 0 \]
+and the boundary condition are dependent on the sources of
+uncertainties
+$$v = v_b(\xi), \quad x \in \partial \Omega .$$
+The objective function is a time-integrated aerodynamic quantity, which depends
+on the pressure and viscous stresses at the boundary:
+\[  {\bf J}(v,\xi) = \int_0^T J({\bf n}\cdot\tau\,|_{\partial\Omega},\,
+                  p\, |_{\partial\Omega}; \,t)\; dt \;,\]
+where the viscous stress tensor is $\tau = \mu \nabla v$,
+and $\bf n$ is the unit wall-normal.
+
+Let $\xi_0$ be the point of linearization, $v_0$ and $p_0$ be the solution of
+the Navier-Stokes equations with boundary condition $v_b(\xi_0)$ and
+forcing term $f(\xi_0)$.
+We can linearize both the Navier-Stokes equations and the objective function.
+By defining $\delta \xi = \xi - \xi_0$, $\delta v = v - v_0$ and
+$\delta p = p - p_0$, the linearized incompressible LES equation is
+\begin{equation} \begin{split} \label{linear_ns}
+    & \frac{\partial\: \delta v}{\partial t} + \mathcal{L}_{v_0}\, \delta v
+      + \nabla \delta p = \frac{\partial f}{\partial \xi}\, \delta \xi \\
+    & \nabla \cdot \delta v = 0
+\end{split} \end{equation}
+with boundary condition
+$$ \delta v = \frac{\partial v_b}{\partial \xi} \, \delta\xi,
+   \quad x \in \partial \Omega ,$$
+and initial condition
+$$ \delta v = 0, \quad t = 0 .$$
+The linearized Navier-Stokes operator ${\mathcal L}_{v_0}$ is defined as
+$$  \mathcal{L}_{v_0} \delta v = \delta v \cdot \nabla v_0
+        + v_0 \cdot \nabla \delta v - \nabla \cdot (\mu \nabla \delta v) \;.$$
+Note that the operator depends on the point of linearization $v_0$.
+
+On the other hand, the linearized objective function is
+\begin{equation} \label{linear_obj} \begin{split}
+   \delta {\bf J}(v,\xi) &= {\bf J}(v,\xi) - {\bf J}(v_0,\xi_0) \\
+ &= \int_0^T \iint_{\partial\Omega}
+    \left(a(x,t) \cdot ({\bf n} \cdot \delta \tau)
+   + b(x,t)\; \delta p \right) ds\; dt \\
+ &+ \int_0^T \iiint_\Omega c(x,t) \cdot \delta v\; dx\; dt \;.
+\end{split} \end{equation}
+where
+\[ \delta\tau = \tau - \tau_0 = \mu_0 \nabla \delta v + \delta\mu \nabla v_0 \]
+$a(x,t)$, $b(x,t)$ and $c(x,t)$ are the Frechet derivatives
+\[ a = \frac{\partial J}{\partial\, ({\bf n} \cdot \tau)} \;, \qquad
+   b = \frac{\partial J}{\partial p}\;, \qquad
+   c = \frac{\partial J}{\partial v}\]
+$a$ is a vector function at the boundaries, $b$ is a scalar function
+at the boundaries, and $c$ is a vector function in the interior.
+
+Define the adjoint variables $\hat v$, $\hat p$ and $\hat \mu$ such that they
+satisfy the adjoint equation
+\begin{equation} \begin{split} \label{adjoint}
+    & - \frac{\partial {\hat v}}{\partial t} + \mathcal{L}_{v_0}^* {\hat v}
+      + \nabla {\hat p} = -c \\
+    & \nabla \cdot {\hat v} = 0
+\end{split} \end{equation}
+where ${\mathcal L}_{v_0}^*$ is the adjoint operator of ${\mathcal L}_{v_0}$:
+\[ {\mathcal L}_{v_0}^* \hat{v} = \nabla v_0 \cdot {\hat v}
+        - v_0 \cdot \nabla {\hat v} - \nabla \cdot (\mu_0 \nabla {\hat v}) \;.\]
+The adjoint variables also must satisfy the terminal condition
+\[ {\hat v} = 0, \quad t = T \]
+and the adjoint boundary condition
+\begin{equation} \label{nsadjbc}
+   {\hat v} = a - {\bf n} \left(b + a \cdot {\bf n} \right),
+   \quad x \in \partial\Omega \;.
+\end{equation}
+We now show that the sensitivity derivatives of the objective function $\bf J$
+with respect to $\xi$ can be calculated using $\xi$ and adjoint variables.
+
+First, the adjoint boundary condition (\ref{nsadjbc}) implies that
+\begin{equation} \label{nsadj1}
+  \delta p\; {\bf n} \cdot {\hat v} = b\: \delta p 
+\end{equation}
+and because ${\bf n} \cdot \tau \cdot {\bf n} \equiv 0$ on the boundaries,
+(\ref{nsadjbc}) further implies
+\begin{equation} \label{nsadj2}
+   {\bf n} \cdot (\mu \nabla \delta v) \cdot {\hat v}
+ = {\bf n} \cdot \delta \tau \cdot {\hat v}
+ = - {\bf n} \cdot \delta \tau \cdot a \;.
+\end{equation}
+In addition, from the adjoint equation,
+\begin{equation} \label{nsadj3}
+c \cdot \delta v = - \delta v \cdot
+      \left( - \frac{\partial {\hat v}}{\partial t}
+            + \mathcal{L}_{v_0}^* {\hat v}
+            + \nabla {\hat p} \right)
+\end{equation}
+and
+\begin{equation} \label{nsadj4}
+0 = \delta p \; \nabla \cdot {\hat v}
+\end{equation}
+Incorporating (\ref{nsadj1}), (\ref{nsadj2}), (\ref{nsadj3}) and (\ref{nsadj4})
+into the linearized objective function (\ref{linear_obj}), we get
+\begin{equation} \label{linear_obj1} \begin{split}
+   \delta {\bf J}(v,\xi)
+   &= \int_0^T \iint_{\partial\Omega}
+      \left({\bf n} \cdot (\mu \nabla \delta v) \cdot {\hat v}
+    - \delta p \: {\bf n} \cdot {\hat v} \right) ds\; dt \\
+   &- \int_0^T \iiint_\Omega \delta v \cdot
+      \left( - \frac{\partial {\hat v}}{\partial t}
+            + \mathcal{L}_{v_0}^* {\hat v}
+            + \nabla {\hat p} \right) dx\;dt \\
+   &+ \int_0^T \iiint_\Omega \delta p \; \nabla \cdot {\hat v}\; dx\;dt \\
+\end{split} \end{equation}
+
+Furthermore, using integration by parts, and applying the initial and boundary
+conditions for both the linearized Navier-Stokes equations and the adjoint
+equation, we get the following four equalities:
+\begin{equation} \label{nsadj5}
+   \int_0^T {\hat v} \cdot \frac{\partial\, \delta v}{\partial t} dt
+ = - \int_0^T \delta v \cdot \frac{\partial {\hat v}}{\partial t} dt
+\end{equation}
+\begin{equation} \label{nsadj6} \begin{split}
+   \iiint_\Omega {\hat v} \cdot {\mathcal L}_{v_0} \delta v\; dx
+ &= \iiint_\Omega \delta v \cdot {\mathcal L}_{v_0}^* {\hat v}\; dx \\
+ &- \iint_{\partial\Omega}
+   {\bf n} \cdot (\mu \nabla \delta v) \cdot {\hat v}\; ds \\
+ &+ \iint_{\partial\Omega}
+   {\bf n} \cdot (\mu \nabla {\hat v} - v_w{\hat v}) \cdot \delta v\; ds
+\end{split} \end{equation}
+\begin{equation} \label{nsadj7}
+   \iiint_\Omega {\hat v} \cdot \nabla \delta p\; dx
+ = - \iiint_\Omega \delta p\; \nabla \cdot {\hat v}\; dx
+ + \iint_{\partial\Omega} \delta p\; {\bf n}\cdot {\hat v} \; ds
+\end{equation}
+\begin{equation} \label{nsadj8}
+   \iiint_\Omega {\hat p}\; \nabla \cdot \delta v\; dx
+ = - \iiint_\Omega \delta v \cdot \nabla {\hat p}\; dx
+ + \iint_{\partial\Omega} {\hat p}\; {\bf n}\cdot \delta v\; ds \;.
+\end{equation}
+Incorporating these four equations
+(\ref{nsadj1}), (\ref{nsadj2}), (\ref{nsadj3}) and (\ref{nsadj4}) into
+(\ref{linear_obj1}), we get
+\[ \begin{split}
+   \delta {\bf J}(v,\xi) =&
+   \int_0^T \iint_{\partial\Omega} ( {\bf n} \cdot (\mu \nabla {\hat v}) -
+   {\bf n} \cdot v_w\; {\hat v} - {\hat p}\; {\bf n} )\cdot \delta v\; ds \\
+   &- \int_0^T \iiint_\Omega {\hat v} \cdot
+      \left( \frac{\partial \,\delta v}{\partial t}
+        + \mathcal{L}_{v_0} \delta v
+        + \nabla \delta p \right) dx\;dt \\
+   &+ \int_0^T \iiint_\Omega {\hat p} \; \nabla \cdot \delta v\; dx\;dt \\
+   =& \int_0^T \iint_{\partial\Omega} ( {\bf n} \cdot (\mu \nabla {\hat v}) -
+   {\bf n} \cdot v_w\; {\hat v} - {\hat p}\; {\bf n} )\cdot
+   \frac{\partial v_b}{\partial \xi} \:\delta \xi \; ds  \\
+   &- \int_0^T \iiint_\Omega {\hat v} \cdot \frac{\partial f}{\partial\xi} \:
+     \delta \xi\; dx\;dt \;.
+\end{split} \]
+Therefore, the sensitivity gradient is
+\begin{equation} \begin{split}
+  \frac{D {\bf J}}{D \xi} &= 
+   \int_0^T \iint_{\partial\Omega} ( {\bf n} \cdot (\mu \nabla {\hat v}) -
+   {\bf n} \cdot v_w\; {\hat v} - {\hat p}\; {\bf n} )\cdot
+   \frac{\partial v_b}{\partial \xi} \; ds  \\
+   &- \int_0^T \iiint_\Omega {\hat v} \cdot \frac{\partial f}{\partial\xi}
+     \; dx\;dt \;.
+\end{split} \end{equation}
+It can be calculated by using the adjoint solution at each time step.
+This is a key motivation for obtaining the adjoint solution in the first place.
+
+
+
+% ======================================================================= %
+%
+% ======================================================================= %
+
+\section{The adjoint Navier-Stokes solver}
+
+This section describes the numerical scheme used to solve the adjoint
+Navier-Stokes equations.  In designing the numerical scheme, we follow the
+``discrete adjoint'' approach.  The numerical scheme we obtain by this
+approach is not only a consistent discretization of the continuous
+adjoint Navier-Stokes equations, it is also the direct discrete adjoint
+of the numerical scheme for solving the unsteady Navier-Stokes equations.
+This approach has an important advantage\footnote{
+The discrete adjoint also have disadvantages compared to the
+continuous adjoint, such as its dependency on the primal scheme, and generally
+greater complexity.}:
+the sensitivity gradient we obtained
+is not affected by discretization error of either the Navier-Stokes equation
+or the adjoint Navier-Stokes equations.  Since the discrete adjoint scheme is
+dependent on the scheme for solving the Navier-Stokes equations, we start by
+describing CDP, our unsteady Navier-Stokes solver on an unstructured hybrid
+mesh.
+
+\subsection{The scheme for solving the unsteady Navier-Stokes equations}
+
+The 3-D unsteady Navier-Stokes solver is called CDP, and is
+developed and maintained by Dr. Frank Ham of the Center for Turbulence
+Research \cite[]{cdp1}.  The solver uses a fractional-step method
+to enforce the divergence-free condition.
+In the most recent version of the solver, an implicit BDF-2
+time integration scheme \cite[]{bdf2} is used for time discretization.
+The spatial discretization is a node based finite volume method.
+Velocity and pressure are stored in the dual-volume corresponding to each node.
+They are denoted as $u$ without subscript, and $p$, respectively.
+A separate velocity field is stored on the surfaces of the dual-volumes,
+precisely corresponding to the face edges, to enforce the divergence-free
+condition.  This auxiliary velocity field
+is denoted as $u_m$.  The Simplex Superposition scheme \cite[]{ss}
+recently developed by Dr. Ham is used for spatial
+discretization of the gradient, divergence, Laplacian and convection operators.
+The scheme is second-order accurate both in space and time for arbitrarily
+shaped elements.
+
+A mathematical description of the discretization scheme is
+\begin{equation} \begin{split} \label{pred-corr}
+   u_m^{k*} = 2 u_m^{k-1} - u_m^{k-2} \\
+   u^{k-\frac23} = \frac43 u^{k-1} - \frac13 u^{k-2} \\
+   \frac32 \frac{u^{k*} - u^{k-\frac23}}{\Delta t} =
+ - u_m^{k*} \cdot \nabla u^{k*} + \nabla \cdot \mu \nabla u^{k*}
+ - \nabla p^{k-1}  \\
+   u^{k-} = u^{k*} + \frac{2 \Delta t}{3} \nabla p^{k-1}  \\
+   \Delta p^k = \frac3{2 \Delta t} \nabla \cdot u^{k-}  \\
+   u^k = u^{k-} - \frac{2 \Delta t}{3} \nabla p^k  \\
+   u_m^k = P_F\, u^{k-} - \frac{2\Delta t}{3} \nabla_F\, p^k \;.
+\end{split} \end{equation}
+In this formula, the first three lines are the prediction step, including
+the BDF-2 scheme (the second and the third lines); the last
+four lines are the pressure correction step.  $u^{k-1}$ is the nodal velocity at
+time step $k-1$.  $u_m^{k-1}$ is the auxiliary divergence-free velocity
+stored on the interface of the dual-volumes at time step $k-1$.
+$u_m^{k*}$ is the extrapolated auxiliary velocity field based on $u_m$
+at time steps $k-1$ and $k-2$, and is used as the convecting velocity
+in the next prediction step.
+$u^{k-\frac23}$ is an extrapolated nodal velocity field from time step $k-1$
+and $k-2$, and is used by the BDF-2 time integration scheme to achieve
+its formal second-order time accuracy.  $u^{k*}$ is the nodal velocity
+at time step $k$ predicted by the prediction step.  It is obtained by
+time-integrating the full Navier-Stokes equations using the BDF-2 scheme,
+using the pressure field $p^{k-1}$ at time step $k-1$ instead of the
+pressure field at time step $k$.
+$u^k$, the final nodal velocity field, is obtained after the correction step.
+After $u^{k*}$ is calculated, we calculate $u^{k-}$ by subtracting the effect
+of the pressure field at time step $k-1$ from $u^{k*}$.
+The pressure $p^k$ at time step $k$ is then calculated from the divergence of
+$u^{k-}$.  The nodal gradient of the new pressure field is then added to
+$u^{k-}$ to obtain $u^k$, the nodal velocity at time step $k$.
+The new auxiliary velocity field, $u_m^k$, is obtained by transferring $u^{k-}$
+to the dual-cell interfaces, then add the interfacial gradient of the new
+pressure field $p^k$.  The transfer operator $P_F$ and interfacial gradient
+operator $\nabla_F$ are designed so that the divergence of $u_m^k$ is exactly
+zero.  The $k$th time step is completed when $p^k$, $u^k$ and $u_m^k$ are
+obtained.
+
+Six discrete spatial operators are used in the scheme:
+the convection operator $u_m \cdot \nabla$, the nodal divergence operator
+$\nabla \cdot$, the nodal gradient operator $\nabla$, the nodal Laplacian
+operator $\Delta$, the nodal to facial transfer operator $P_F$, and
+the nodal to facial gradient operator $\nabla_F$.
+In the most recent version of CDP, these discrete operators are constructed
+with the Simplex Superposition principle \cite[]{ss}.  These operators satisfy
+$\nabla_F \cdot \nabla_F = \Delta$ and $\nabla_F \cdot P_F = \nabla \cdot$,
+ensuring the discrete divergence-free condition of the facial velocity $u_m$,
+i.e., $\nabla_F \cdot u_m = 0$.  The Simplex-Superposition based schemes have
+excellent memetic properties \cite[]{ss}, in the sense that the discrete
+operators retain many benign properties of their continuous counterparts,
+such as discrete conservation of kinetic energy \cite[]{kec}.
+In addition, due to their memetic properties,
+the Laplacian operator is discretely self-adjoint,
+while the nodal divergence operator and the nodal gradient operator are
+discretely adjoint to each other.
+These properties makes construction of the discrete adjoint scheme easier.
+
+
+\subsection{The homogeneous adjoint scheme}
+
+A homogeneous adjoint equation is an adjoint equation with zero source term
+and trivial boundary conditions.  It corresponds to the continuous adjoint
+equation (\ref{adjoint}) and boundary condition (\ref{nsadjbc}) with
+$a = b = c = 0$.
+The following equations describe the discrete adjoint version of
+(\ref{pred-corr}) that solves the homogeneous adjoint equation.
+\begin{equation} \begin{split} \label{pred-corr-adj}
+  \Delta q^k = \frac{\hat p^k + \nabla \cdot \hat u^k}{\Delta t} +
+                \nabla_F \cdot \hat u_m^{k*} \\
+   \hat u^{k-} = \hat u^k + \Delta t \left( P_N\,\hat u_m^{k*} -
+                                            \nabla q^k \right) \\
+   \frac 32 \frac{\hat u^{k-\frac23} - \hat u^{k-}}{\Delta t} =
+   u_m^{k*} \cdot \nabla \hat u^{k-\frac23}
+ + \nabla \cdot \mu \nabla \hat u^{k-\frac23} \\
+   \hat u^{k-1} = \frac43 \hat u^{k-\frac23} - \frac13 \hat u^{k+\frac13} \\
+   \hat u_m^{k} = -\frac23\, \nabla u^{k*} \cdot \hat u^{k-\frac23} \\
+   \hat p^{k-1} = \nabla \cdot \left(\hat u^{k-\frac23} - \hat u^{k-}\right) \\
+   \hat u_m^{k-1*} = 2 \hat u_m^{k} - \hat u_m^{k+1}
+\end{split} \end{equation}
+A brief derivation of this scheme is presented in Appendix A.
+One can show that this scheme is a consistent (though unusual) discretization
+of the homogeneous continuous adjoint equation, i.e., equation (\ref{adjoint}),
+with zero source term $c$.
+Therefore, as the mesh is refined, the solution using this scheme converges to
+the continuous adjoint solution.  In addition, this scheme is the discrete
+adjoint of the scheme (\ref{pred-corr}).
+If we write the discrete tangent linear Navier-Stokes
+equations as a single matrix equation whose solution consists of its solution
+at all grid points and all time steps, our discrete adjoint scheme
+(\ref{pred-corr-adj}) would be
+equivalent to solving the transpose of the huge matrix equation.  For this
+reason, the adjoint solution of this scheme and the Navier-Stokes solution using
+scheme (\ref{pred-corr}) satisfy the discrete adjoint condition\footnote{
+A rigorous proof of this discrete adjoint condition is presented in Appendix A.
+}:
+\[\begin{split}
+ & \sum \left( \delta u^k \cdot \hat u^k -
+   \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^k \cdot \hat u_m^{k*} -
+                  \delta u_m^{k-1} \cdot \hat u_m^{k+1} +
+                  \frac23\, \delta p^k \hat p^k \right) dV \\
+=& \sum \left( \delta u^{k-1} \cdot \hat u^{k-1} -
+   \frac13\, \delta u^{k-2} \cdot \hat u^{k-\frac23} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^{k-1} \cdot \hat u_m^{k-1*} -
+                   \delta u_m^{k-2} \cdot \hat u_m^k
+                + \frac23\, \delta p^{k-1} \hat p^{k-1} \right) dV \;.
+\end{split} \]
+Or equivalently,
+\[\begin{split}
+ & \sum \left( \delta u^k \cdot \hat u^k -
+   \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^k \cdot \hat u_m^{k*} -
+                  \delta u_m^{k-1} \cdot \hat u_m^{k+1} +
+                  \frac23\, \delta p^k \hat p^k \right) dV 
+= \mbox{Constant for all } k \;.
+\end{split} \]
+In this discrete adjoint condition, $\sum dV$ represents a numerical
+integration of a scalar field over the entire volume.  Specifically,
+\begin{equation} \label{empty_summation}
+\sum \phi\; dV = \sum \phi_i dV_i ,
+\end{equation}
+where the summation is over all the grid points in the mesh, $\phi_i$ is the
+value of the scalar field on the $i$th mesh point, and $dV_i$ is the volume
+of the corresponding dual-control volume.  This notation is also used to
+describe the inhomogeneous discrete adjoint condition in the next subsection.
+$\Delta t$ is the size of the time step between the $k-1$st and the
+$k$th time steps.
+This discrete adjoint condition is satisfied with any mesh resolution and
+time step.
+
+The adjoint equation evolves backward in time; its terminal condition is
+set at the last time step of the Navier-Stokes time integration, and each
+evaluation of the adjoint scheme (\ref{pred-corr-adj}) brings the adjoint
+solution one time step backward.  Note that the primal intermediate facial and
+nodal velocities $u_m^{k*}$ and $u^{k*}$ appear in (\ref{pred-corr-adj}), which
+is consistent with the fact that the continuous form of the adjoint equation
+(\ref{adjoint}) contains the primal velocity $u$.  This fact suggests that
+applying the adjoint scheme at the $k$th time step requires information from the
+Navier-Stokes solution at the same time step.  For this reason, solving the
+adjoint equation for each time step involves some preparation before
+performing the calculation in (\ref{pred-corr-adj}):
+\begin{enumerate}
+\item Obtain the Navier-Stokes state variables $u^{k-1}$, $u^{k-2}$,
+      $u_m^{k-1}$, $u_m^{k-2}$ and $p^{k-1}$.
+\item Solve the prediction part (first three lines) of the Navier-Stokes step
+      (\ref{pred-corr}) for $u^{k*}$ and $u_,^{k*}$.
+\item Retrograde the adjoint solution using the adjoint scheme
+      (\ref{pred-corr-adj}).
+\end{enumerate}
+Since the adjoint equation is calculated retrograde in time, the Navier-Stokes
+state variables are needed in a reverse-time order.  The dynamic checkpointing
+scheme described in Chapter 3 is applied to fulfill this requirement.
+Using our dynamic checkpointing scheme, the adjoint equation can be solved at
+a computational cost of around 4 to 8 times that of the Navier-Stokes equations,
+with moderate increase in memory usage.
+
+
+\subsection{The inhomogeneous adjoint scheme and sensitivity gradient}
+
+In the previous section, we discussed the scheme for solving homogeneous adjoint
+equation, i.e., the adjoint equation with a zero source term and trivial
+boundary conditions.  In practice, most objective functions are
+time integrals of physical quantities in the flowfield or on the boundary.
+Consequently, the adjoint equations for these objective functions has either
+a nonzero source term or nontrivial boundary condition.
+This section focuses on these inhomogeneous adjoint equations.
+We discuss how to construct the source term based on the specific form of
+the objective function, and how to calculate the sensitivity gradients using
+the solution of the adjoint equation.
+
+In general, the objective function depends on the velocity field and the
+pressure field.  Denote the objective function as $\bf J$, and let
+\[ J_{u\,i}^k = \frac{\partial {\bf J}}{\partial u_i^k} \;,\quad
+   J_{p\,i}^k = \frac{\partial {\bf J}}{\partial p_i^k} \]
+the derivatives of the objective function with respect to the velocity and
+pressure at every grid point and every time step.
+The general form of the objective function can then be linearized as
+\[ \delta {\bf J} = \sum_{k=0}^{M_T} \Delta t
+            \sum \left(J_u^k \cdot \delta u^k + J_p^k\,\delta p^k\right) dV ,\]
+where $M_T$ is the last time step in the problem considered, and the
+inner summation is as defined in Equation (\ref{empty_summation}).
+Similarly, a general assumption with the uncertainties is that they add a source
+term to the momentum equation anywhere and anytime.  In other words,
+the uncertainties lead to the following modification of the velocity field
+\[ u^k = u^k + \Delta t\; f^k(\xi) \]
+at the end of every time step of the Navier-Stokes equations.
+Its linearized form is
+\begin{equation} \label{source_linearns}
+\delta u^k = \delta u^k + \Delta t\;
+             \frac{\partial f^k}{\partial \xi}\;\delta\xi .
+\end{equation}
+The initial condition can also be uncertain, and is a function of $\xi$.
+The linearized initial condition is
+\[ \begin{split}
+& \delta u^0 = \frac{\partial u^0}{\partial \xi}\;\delta\xi \\
+& \delta u_m^0 = \frac{\partial u_m^0}{\partial \xi}\;\delta\xi \;.
+\end{split} \]
+The form of the inhomogeneous adjoint equation depends on the linearized
+objective function, specifically on $J_u$ and $J_p$.  On the other hand,
+the formula for computing the sensitivity gradient from the adjoint solution
+depends on how the sources of uncertainties influence the system, specifically
+on $\dfrac{\partial f^k}{\partial \xi}$.
+
+We solve the inhomogeneous adjoint equation with the same scheme as
+(\ref{pred-corr-adj}), except at the end of each time step, we let
+\begin{equation} \begin{split} \label{source_adjns}
+& {\hat u}^{k-1} = {\hat u}^{k-1} + \Delta t\; J_u^{k-1} \\
+& {\hat p}^{k-1} = {\hat p}^{k-1} + \frac32\; J_p^{k-1} \;,
+\end{split} \end{equation}
+where the $\frac32$ in the adjoint pressure update is due to the BDF-2 scheme.
+This addition of a source term in the linearized Navier-Stokes equations as
+in (\ref{source_linearns}), and in the adjoint Navier-Stokes equations as in
+(\ref{source_adjns}), both modifying the discrete adjoint condition from its
+homogeneous form.  The inhomogeneous discrete adjoint condition is
+\[\begin{split}
+ & \sum \left( \delta u^k \cdot \hat u^k -
+   \frac13\, \delta u^{k-1} \cdot \hat u^{k+\frac13} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^k \cdot \hat u_m^{k*} -
+                  \delta u_m^{k-1} \cdot \hat u_m^{k+1} +
+                  \frac23\, \delta p^k \hat p^k \right) dV - 
+ \Delta t \sum \left(\frac{\partial f^k}{\partial \xi} \cdot {\hat u}^k
+                 \;\delta\xi\right) dV \\
+=& \sum \left( \delta u^{k-1} \cdot \hat u^{k-1} -
+   \frac13\, \delta u^{k-2} \cdot \hat u^{k-\frac23} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^{k-1} \cdot \hat u_m^{k-1*} -
+                   \delta u_m^{k-2} \cdot \hat u_m^k
+                + \frac23\, \delta p^{k-1} \hat p^{k-1} \right) dV - \\
+ & \Delta t \sum \left( \delta u^{k-1} \cdot J_u^{k-1}
+                      + \delta p^{k-1} J_p^{k-1} \right) dV \;,
+\end{split} \]
+where the summation is as defined in Equation (\ref{empty_summation}).
+Applying this equality for $k=1,2,\ldots,M_T$, we get
+\begin{equation} \label{inhom_adj_cond} \begin{split}
+ & \sum \left( \delta u^{M_T} \cdot \hat u^{M_T} -
+   \frac13\, \delta u^{M_T-1} \cdot \hat u^{M_T+\frac13} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^{M_T} \cdot \hat u_m^{M_T*} -
+                  \delta u_m^{M_T-1} \cdot \hat u_m^{M_T+1} +
+                  \frac23\, \delta p^{M_T} \hat p^{M_T} \right) dV + \\
+ & \sum_{k=0}^{M_T-1} \Delta t
+ \sum \left( \delta u^{k} \cdot J_u^{k}
+           + \delta p^{k} J_p^{k} \right) dV \\
+=& \sum \left( \delta u^0 \cdot \hat u^0 -
+   \frac13\, \delta u^{-1} \cdot \hat u^{\frac13} \right) dV + \\
+ & \sum \Delta t \left( \delta u_m^0 \cdot \hat u_m^{0*} -
+                  \delta u_m^{-1} \cdot \hat u_m^{1} +
+                  \frac23\, \delta p^0 \hat p^0 \right) dV + \\
+ & \sum_{k=1}^{M_T} \Delta t
+ \sum \left(\frac{\partial f^k}{\partial \xi} \cdot {\hat u}^k
+                 \;\delta\xi\right) dV \;.
+\end{split}\end{equation}
+When the simulation starts, $u^{-1}$, $u_m^{-1}$ and $p^0$ are set to 0.
+So there are no uncertainties in these quantities.
+Also, we set the adjoint terminal condition as
+\begin{equation} \begin{split} \label{source_adjns}
+& {\hat u}^{M_T} = \Delta t\; J_u^{k-1} \\
+& {\hat p}^{M_T} = \frac32\; J_p^{k-1} \\
+& {\hat u}^{M_T+\frac13} = 0 \\
+& {\hat u_m}^{M_T} = 0 \\
+& {\hat u_m}^{M_T+1} = 0  \;.
+\end{split} \end{equation}
+The inhomogeneous discrete adjoint condition (\ref{inhom_adj_cond}) becomes
+\[\begin{split}
+ & \sum_{k=0}^{M_T} \Delta t
+ \sum \left( \delta u^{k} \cdot J_u^{k}
+           + \delta p^{k} J_p^{k} \right) dV \\
+=& \sum \left( \delta u^0 \cdot \hat u^0 +
+ \Delta t\; \delta u_m^0 \cdot \hat u_m^{0*} \right) dV +
+ \sum_{k=1}^{M_T} \Delta t
+ \sum \left(\frac{\partial f^k}{\partial \xi} \cdot {\hat u}^k
+                 \;\delta\xi\right) dV  \;.
+\end{split}\]
+In other words,
+\[ \delta {\bf J}
+= \sum \left( \frac{\partial u^0}{\partial\xi} \cdot \hat u^0 +
+ \Delta t\; \frac{\partial u_m^0}{\partial\xi} \cdot \hat u_m^{0*} \right)
+  \delta \xi\;dV +
+ \sum_{k=1}^{M_T} \Delta t
+ \sum \left(\frac{\partial f^k}{\partial \xi} \cdot {\hat u}^k
+                 \;\delta\xi\right) dV \;.\]
+Therefore, the sensitivity gradient can be calculated by
+\begin{equation} \label{sensitivity_discrete}
+\frac{D {\bf J}}{D \xi}
+= \sum \left( \frac{\partial u^0}{\partial\xi} \cdot \hat u^0 +
+ \Delta t\; \frac{\partial u_m^0}{\partial\xi} \cdot \hat u_m^{0*} \right)
+ \;dV +
+ \sum_{k=1}^{M_T} \Delta t
+ \sum \left(\frac{\partial f^k}{\partial \xi} \cdot {\hat u}^k \right) dV \;.
+\end{equation}
+We note that the adjoint solution at all time steps is used in calculating
+the sensitivity gradient.  After the adjoint solution is computed at
+each time step $k$,
+$ \sum \left(\frac{\partial f^k}{\partial \xi} \cdot {\hat u}^k \right) dV $
+is calculated and added to the sensitivity gradient.  The full
+sensitivity gradient can be computed only after the adjoint solution reaches
+time step $0$.
+
+
+
+\section{Numerical example of an adjoint solution} \label{s:cylinder_adj}
+
+The last section discussed how to solve the adjoint Navier-Stokes
+equations for general objective functions.  This section gives an example of
+the process.  We consider a Newtonian incompressible fluid
+flowing past an infinitely long circular cylinder.  The Reynolds number
+with respect to the far-field flow velocity and the cylinder diameter is 100.
+At this Reynolds number, the flowfield is 2-D, unsteady and periodic
+in time \cite[]{fey:1547}.
+
+The incompressible Navier-Stokes equations were solved in a
+2-D domain of size 60 cylinder diameters (flow direction) by 80
+cylinder diameters (crossflow direction).  The domain was discretized with
+approximately 10,000 unstructured quadrangle mesh elements.
+By taking advantage of
+the unstructured grid, most of the mesh points were concentrated
+around the cylinder
+and in a band of length 10 cylinder diameters downstream of the cylinder.
+Figure \ref{mesh1} shows the unstructured mesh used.
+\begin{figure}[htb!] \center 
+\includegraphics[width=2.34in]{output_adj/mesh1.png}
+\includegraphics[width=3.0in]{output_adj/mesh2.png}
+\caption{The mesh used for calculating the flowfield at Reynolds number 100.
+The left picture shows the entire computational domain of $60 \times 80$;
+the right picture zooms in to a small region around the cylinder.}
+\label{mesh1}
+\end{figure}
+The flow velocity on the left
+boundary of the domain was set to the freestream velocity, the upper and lower
+boundaries of the domain were set to periodic, and an convective outlet
+boundary condition
+was used at the downstream boundary.  An algebraic multigrid solver was used
+to solve the Poisson equation in the corrector steps.  We used a fixed time
+step size, $\Delta t = 0.1$, in this calculation.  The corresponding CFL
+number was approximately $3$ in the region near the cylinder.
+All physical quantities were
+normalized with respect to the fluid density, the freestream velocity and
+the cylinder diameter.
+
+The uncertainty in the problem we consider comes from small rotational
+oscillations of the cylinder in the flow.
+The specific form of the oscillation is
+unknown, and the rate of rotation $\omega$ is modeled as a random time process.
+A no-slip boundary condition is used on the wall, which is
+\[ v_x = \omega y, \quad v_y = -\omega x. \]
+ 
+Oscillatory rotation of the cylinder has been shown to
+have significant effect on the drag coefficient \cite[]{rotary_control}.
+The objective of this example is to analyze the effect of the small
+random rotational oscillations on the drag coefficient.  Specifically,
+we want to obtain the probability distribution of the time-averaged drag
+coefficient of the cylinder from the random rotation.
+We describe this process as `'propagating'' the uncertainties from
+the sources, the random rotation in this example,
+to the objective quantity, the time-averaged drag coefficient $\bar{c_d}$.
+
+The objective function is
+\[ {\bf J} = \overline{c_d} = \frac{1}{T} \int_0^T c_d\: dt \;,\]
+where $c_d$ is the instantaneous drag coefficient,
+\[ c_d = \frac{D(t)}{\frac12 \rho v_\infty^2 d} \;.\]
+$D(t)$ is the instantaneous drag on the cylinder per spanwise length,
+$\rho$ is fluid density, $v_\infty$ is freestream velocity and $d$ is the
+cylinder diameter.  Since all quantities are normalized with $\rho$,
+$v_\infty$ and $d$, $\rho v_\infty^2 d = 1$, and
+\[ c_d = 2 D(t) \;.\]
+The instantaneous unit-span drag $D(t)$ consists of pressure drag $D_p$ and
+viscous drag $D_v$, which are
+\[ D_p = -\oint p {\bf n} \cdot {\bf e_x} ds \]
+\[ D_v = \oint {\bf n} \cdot \tau \cdot {\bf e_x} ds \]
+and
+\[ c_d = 2 \oint ({\bf n} \cdot \tau - p {\bf n}) \cdot {\bf e_x} \; ds \]
+where $\bf n$ is wall-normal unit vector,
+$\mu$ is viscosity, ${\bf e_x} = (1,0,0)$ is the
+unit vector in the $x$-direction, and the integration is on the circumference
+of the cylinder cross-section.
+
+A numerical approximation of the time-averaged drag coefficient is
+\begin{equation} \label{discrete_meancd}
+  {\bf J} = \frac{2}{T} \sum_{k=1}^T \Delta t
+         \sum_{i \in sfc}
+         ({\bf n}_i \cdot \tau_i - p_i {\bf n}_i) \cdot {\bf e_x} ds_i\; .
+\end{equation}
+In the formula, $sfc$ represents mesh nodes on the wall boundary of
+the cylinder, $p_i$ is the pressure, and $\tau_i$ is the
+viscous stress at node $i$, which can be directly calculated from the velocity
+of its neighboring nodes:
+\[ \tau_i = \frac{1}{Re} \nabla v |_i
+ = \frac{1}{Re} \sum_{j\in nbr(i)} \kappa_{i\,j} v_{j} \;, \]
+where $\kappa_{i\,j}$ is the Simplex-Superposition discretization of
+the gradient operator, its specific value depends on the cell types and
+geometry.  We note that this objective function is linear with
+respect to the velocity and pressure.  The source term of the
+adjoint equation corresponding to this objective function is
+\begin{equation} \begin{split} \label{drag_adjsrc}
+ J_{v\,i} &= \sum_{j \in sfc \cup nbr(i)} {\bf n}_j \cdot \kappa_{j\,i}
+             {\bf e_x} \\
+ J_{p\,i} &= \begin{cases} {\bf n}_i \cdot {\bf e_x} & i \in sfc \\
+                           0 & i \notin sfc \quad.\end{cases}
+\end{split} \end{equation}
+
+\begin{figure}[htb!] \center
+\includegraphics[width=2.05in]{output_adj/u1.png}
+\includegraphics[width=2.05in]{output_adj/adj1.png}
+\includegraphics[width=2.05in]{output_adj/u2.png}
+\includegraphics[width=2.05in]{output_adj/adj2.png}
+\includegraphics[width=2.05in]{output_adj/u3.png}
+\includegraphics[width=2.05in]{output_adj/adj3.png}
+\includegraphics[width=2.05in]{output_adj/u4.png}
+\includegraphics[width=2.05in]{output_adj/adj4.png}
+\caption{Flow and adjoint solutions at $t=125.0, 126.5, 128.0, 129.5$
+(upper-left, upper-right, lower-left, lower-right)}
+\label{solutions}
+\end{figure}
+
+We use the numerical schemes (\ref{pred-corr-adj}) and (\ref{source_adjns})
+with the source term (\ref{drag_adjsrc}) to solve the inhomogeneous adjoint
+equation, so that the corresponding objective function is the discretized
+time-averaged drag coefficient (\ref{discrete_meancd}).
+Several snapshots of the adjoint solution are depicted in
+Figure \ref{solutions}.  The left side of the figure shows the streamwise
+velocity $u_x$ at four time instances;
+the right side shows the corresponding adjoint streamwise velocity
+${\hat u}_x$.  These adjoint fields reveals the sensitivity derivative
+of the objective function with respect to changes in the flowfield.
+In these plots, red is positive values of ${\hat u}_x$, indicating that
+a positive change in the streamwise velocity would increase the drag of
+the cylinder.  Such regions include the upstream of the cylinder, where
+an increase in $u_x$ would generate more skin friction drag,
+and unsteady bands in the shear layers on the sides of the cylinder,
+where an increase in $u_x$
+would temporarily widen the wake, creating more pressure drag on the cylinder.
+In contrast, blue is negative values of ${\hat u}_x$, indicating that a
+positive change in the streamwise velocity would reduce the drag of the
+cylinder.  These regions are unsteady bands in the shear layers where
+an increase in $u_x$ would temporarily narrow the wake, decreasing the pressure
+drag.
+
+By integrating the adjoint solution using (\ref{sensitivity_discrete}), we
+obtain the sensitivity gradient of the objective function with respect to
+the random variables describing the sources of uncertainty.  In this case,
+it is the sensitivity gradient of the time-averaged drag coefficient with
+respect to the rate of rotation $\omega$.  Since $\omega$ is a random time
+process, the sensitivity gradient obtained is a function of time.  This
+function
+${\hat \omega} = \left. \dfrac{\partial {\bf J}}{\partial \omega} \right|_t$
+is plotted in Figure \ref{mean}, along with the time history of the
+instantaneous lift and drag coefficients on the cylinder.
+
+\begin{figure}[htb!] \center
+\includegraphics[width=5in]{output_cdp003/mean.png}
+\caption{The time history of $c_l$, $c_d$ and
+$\hat{\omega}= \frac{\partial \bf J}{\partial \omega}$ of flow past a
+non-rotating circular cylinder at $Re=100$.  The objective function for the
+adjoint equation is the time-integrated drag on the cylinder.
+The time averaged drag coefficient $1.3345$ is plotted as a dotted line in
+the $c_d$ plot.}
+ \label{mean}
+\end{figure}
+
+This example completes our discussion of how to solve the adjoint equation for
+the unsteady incompressible Navier-Stokes equations, and how to calculate the
+sensitivity gradient from the adjoint solution.  The next two chapters
+discuss how to use this sensitivity gradient in uncertainty quantification
+problems.

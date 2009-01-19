@@ -1,0 +1,656 @@
+\chapter[Quantification of Risk using the Adjoint Method]
+        {Quantification of Margins and Risk using the Adjoint Method}
+
+\section{Introduction}
+The previous chapters discussed how to solve the adjoint equation for unsteady
+problems, and how to calculate the sensitivity gradient using the resulting
+adjoint solution.
+This chapter and the next present two uncertainty quantification
+methods that use the sensitivity gradients calculated from the adjoint solution.
+Discussed in this chapter is a method for failure and
+risk analysis.  These types of analyses require calculating tail probabilities
+of an objective function.  More specifically, we want to calculate the
+small probability that the objective function exceeds a certain critical value,
+usually representing the probability that a system fails or suffers
+catastrophic losses.
+Mathematically, let ${\bf J}(\xi)$ be the objective function,
+which depends on a vector of uncertain variables $\xi$.  The probability
+distribution of $\xi$ is known.  Let ${\bf J_C}$ be a known constant.
+We want to calculate $P({\bf J} > {\bf J_C})$.  This probability can be as
+high as $10\%$, and as small as $10^{-5}$ or even smaller.
+
+Calculating such tail probabilities is challenging.
+Polynomial chaos and collocation based methods do not represent tail
+probabilities accurately.
+Monte Carlo is the most commonly used method in this situation.
+However, the brute force
+Monte Carlo method can be very computationally expensive and inefficient;
+if the tail probability is small, only a small fraction of
+the samples would fall into the tail region, resulting in insufficient
+sampling.  In fact, let $\xi_i, i=1,\ldots,N$ be samples of $\xi$.
+The brute force Monte Carlo method approximates
+\[ P({\bf J} > {\bf J_C}) \approx P_N =
+   \frac{1}{N} \sum_{i=1}^N I({\bf J}(\xi_i) > {\bf J_C}) \;, \]
+where $I({\bf J}(\xi_i) > {\bf J_C})$ is the indicator function.  Its value
+is 1 if ${\bf J}(\xi_i) > {\bf J_C}$ is true and zero otherwise.
+The variance of this estimator $P_N$ is
+\begin{equation} \label{var_naive}
+  \mathrm{Var}[P_N] = \frac{1}{N} \mathrm{Var}[I({\bf J}(\xi_i) > {\bf J_C})]
+   = \frac{P({\bf J} > {\bf J_C}) - P({\bf J} > {\bf J_C})^2}{N} \;.
+\end{equation}
+The relative error of the Monte Carlo method can be characterized by the
+ratio of the standard deviation and the mean of the estimator $P_N$, which is
+\[ \frac{\sqrt{\mathrm{Var}[P_N]}}{P({\bf J} > {\bf J_C})}
+ = \sqrt{\frac{1 - P({\bf J} > {\bf J_C})}{N\,P({\bf J} > {\bf J_C})}} .\]
+This formula reveals the inefficiency of the brute force Monte Carlo method when
+the tail probability is small.  For a fixed number of samples,
+the smaller the tail probability $P({\bf J} > {\bf J_C})$, the larger
+the relative error; for a fixed target relative error, the smaller the
+tail probability, the more samples must be used to meet the target relative
+error.  For example, if the tail probability $P({\bf J} > {\bf J_C}) = 5\%$,
+and the target relative error is $10\%$, about 2,000 samples should be used.
+But when the tail probability to be calculated is $0.1\%$, 100,000 samples
+should be used.  In computationally intensive engineering problems, calculating
+${\bf J}(\xi_i)$ for each $\xi_i$ is expensive.  Therefore, it is impractical
+to use the brute force Monte Carlo method, and some method of accelerating
+its convergence rate must be used.
+
+
+
+\section{Accelerating Monte Carlo using adjoint sensitivity gradient}
+
+Acceleration of convergence for Monte Carlo methods can be achieved by
+reducing the variance of its estimator.  For a fixed target approximation
+error, the number of samples required is proportional to the variance
+of an unbiased estimator.  This section discusses variance-reduction
+techniques for calculating the tail probability $P({\bf J} > {\bf J_C})$
+based on a single adjoint calculation.  The adjoint calculation can be
+used to calculate the sensitivity gradient, which can be used to
+approximate the objective function as a linear function of the
+random variables describing the sources of uncertainty.  Suppose
+the adjoint is evaluated at $\xi_0$, and the sensitivity gradient
+${\bf J}'(\xi_0)$ is calculated from the adjoint solution.
+The objective function can be approximated in the vicinity of $\xi_0$ as
+\[ {\bf J}(\xi) \approx {\bf J}_L(\xi)
+ = {\bf J}(\xi_0) + \nabla {\bf J}(\xi_0) \cdot (\xi - \xi_0) \;.\]
+The information
+provided by this linear approximation enables us to reduce the variance
+of the Monte Carlo method using control variate and importance sampling.
+Section \ref{s:control_variate} discusses the control variate technique, and
+Section \ref{s:importance_sampling} combines
+control variate with importance sampling to further reduce the variance.
+
+\subsection{Control variates} \label{s:control_variate}
+
+The idea of control variate \cite[]{glynn_cv} explores the similarity
+between the real objective
+function $\bf J$ and its linear approximation ${\bf J}_L$.  In this method,
+we approximate the target tail probability $P({\bf J} > {\bf J_C})$
+with the estimator
+\[ P({\bf J} > {\bf J_C}) \approx P^{CV}_N
+ = P({\bf J}_L > {\bf J_C}) + \frac{1}{N}
+   \sum_{i=1}^N \left(
+   I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C})\right) \;.
+\]
+This estimator $P^{CV}_N$ is unbiased for $P({\bf J} > {\bf J_C})$
+because
+\[ \begin{split}
+   \mathrm{E}\left[P^{CV}_N\right] &= P({\bf J}_L > {\bf J_C})
+ + \mathrm{E}[I({\bf J}(\xi_i) > {\bf J_C})]
+ - \mathrm{E}[I({\bf J}_L(\xi_i) > {\bf J_C})] \\
+&= P({\bf J}_L > {\bf J_C}) + P({\bf J} > {\bf J_C})
+ - P({\bf J}_L > {\bf J_C}) \\
+&= P({\bf J} > {\bf J_C}) \;.
+\end{split} \]
+The variance of this new estimator is
+\begin{equation} \begin{split} \label{var_cv}
+   \mathrm{Var}\left[P^{CV}_N\right] =& \frac{1}{N} \;
+   \mathrm{Var}\left[I({\bf J} > {\bf J_C}) -
+                     I({\bf J}_L > {\bf J_C})\right] \\
+=& \frac{1}{N} \left(P({\bf J} > {\bf J_C} > {\bf J}_L \mbox{ or }
+           {\bf J} < {\bf J_C} < {\bf J}_L) -
+         (P({\bf J}_L > {\bf J_C}) - P({\bf J} > {\bf J_C}))^2 \right) .
+\end{split} \end{equation}
+From this formula, we can see that the variance of the control variate
+estimator depends on the accuracy the linear approximation ${\bf J}_L$.
+If the approximation is good, then
+${\bf J} \approx {\bf J}_L$.  As a result, $P({\bf J} > {\bf J_C} > {\bf J}_L
+\mbox{ or } {\bf J} < {\bf J_C} < {\bf J}_L)$, which is the probability that
+${\bf J_C}$ lies within the small interval $[{\bf J}, {\bf J}_L]$, is small.
+Since $\mathrm{Var}\left[P^{CV}_N\right] \le \dfrac{1}{N}\:
+P({\bf J} > {\bf J_C} > {\bf J}_L
+\mbox{ or } {\bf J} < {\bf J_C} < {\bf J}_L)$, the variance is small.
+In fact, if the approximation is exact, i.e., ${\bf J}_L = {\bf J}$, then
+the variance is zero.  However, if the approximation is not
+accurate at all, this estimator may not reduce the variance.  For
+example, if the ${\bf J}_L < {\bf J_C}$ is a constant, then
+$P({\bf J} > {\bf J_C} > {\bf J}_L
+\mbox{ or } {\bf J} < {\bf J_C} < {\bf J}_L) = P({\bf J} > {\bf J_C})$,
+and $ \mathrm{Var}\left[P^{CV}_N\right] = \dfrac{1}{N} \;
+\left(P({\bf J} > {\bf J_C}) -
+     P({\bf J}_L > {\bf J_C})^2 \right)$ is the same as the variance of
+the Naive Monte Carlo method.  For this reason, this method offers the most
+improvement in convergence when the linear approximation ${\bf J}_L$ is
+at least a fairly accurate approximation.
+
+In Section \ref{s:acc_monte_example},
+we will apply the control variate technique
+in an unsteady fluid flow problem, and demonstrate its variance-reduction
+effectiveness.
+
+
+
+\subsection{Importance sampling} \label{s:importance_sampling}
+
+The brute force Monte Carlo method is ineffective when the target failure
+probability
+is small because only a small fraction of samples lay in the region where
+failure might occur.  The importance sampling technique \cite[]{glynn_is}
+addresses this
+ineffectiveness by concentrating the samples in regions where the failure
+is more likely to occur.
+
+In our adjoint-based importance sampling, we select the concentration of
+sampling based on how likely the objective function $\bf J$ and its linear
+approximation ${\bf J}_L$ are on different sides of the critical value
+${\bf J_C}$.  Therefore, the first step
+of our method is to estimate the error of this linear approximation;
+since it is likely to grow as $O(|\xi - \xi_0|^2)$, we model the
+normalized approximation error
+$\dfrac{{\bf J} - {\bf J}_L}{||\xi - \xi_0||^2}$ as
+a random variable, whose probability distribution is estimated by plotting
+the histogram of
+$\dfrac{{\bf J}(\xi_i) - {\bf J}_L(\xi_i)}{||\xi_i - \xi_0||^2}$ 
+for a small number of samples $\xi_i$.  This step quantifies how much the
+objective function ${\bf J}$ may deviate from its linear approximation
+${\bf J}_L$.  For each $\xi$, without going through the expensive process of
+calculating the objective function ${\bf J}(\xi)$, we can estimate its prior
+probability distribution based only on its linear approximation
+${\bf J}_L(\xi)$ and $|\xi - \xi_0|^2$.  Note that this probability
+distribution is defined in the Bayesian sense, in contrast to the tail
+probability we intend to calculate, which is defined as a frequency probability.
+For the sake of clarity, we denote the Bayesian probability as $p$ and the
+frequency probability as $P$.
+
+Now for each $\xi$, we can calculate the prior probability
+\[ p({\bf J}(\xi) > {\bf J_C} \;|\; {\bf J}_L(\xi))
+ = p\left( \left.\dfrac{{\bf J}(\xi) - {\bf J}_L(\xi)}{||\xi - \xi_0||^2}
+   > \dfrac{{\bf J_C} - {\bf J}_L(\xi)}{||\xi - \xi_0||^2} \;\right|\;
+   {\bf J}_L(\xi) \right) \] 
+based on the value of ${\bf J}_L(\xi)$ and the estimated probability
+distribution
+of $\dfrac{{\bf J}(\xi) - {\bf J}_L(\xi)}{||\xi - \xi_0||^2}$.
+We call it {\it a prior}
+probability because this probability is estimated prior to
+calculating the real value of the objective function ${\bf J}(\xi)$.
+Furthermore, we can calculate the prior probability that the objective
+function and its linear approximation are on different sides of $\bf J_C$.
+We denote this probability as $p_D$,
+\[\begin{split}
+   p_D(\xi) &= p({\bf J}(\xi) > {\bf J_C} > {\bf J}_L(\xi)
+   \mbox{ or } {\bf J}(\xi) < {\bf J_C} < {\bf J}_L(\xi)
+   \;|\; {\bf J}_L(\xi)) \\
+&= \begin{cases} p({\bf J}(\xi) > {\bf J_C} \;|\; {\bf J}_L(\xi)),
+                 & {\bf J_C} > {\bf J}_L(\xi) \\
+             1 - p({\bf J}(\xi) > {\bf J_C} \;|\; {\bf J}_L(\xi)),
+                 & {\bf J_C} < {\bf J}_L(\xi) \;.
+   \end{cases}
+\end{split}\]
+
+
+Our importance sampling technique concentrates the samples based on this
+prior probability.  For each proposed sample $\xi_i$ obtained according to the
+distribution of $\xi$, we calculate ${\bf J}_L(\xi_i)$ and $ p_D(\xi)$.
+This probability determines the rate at which the proposed sample is approved
+or rejected.
+Specifically, an independent uniform pseudo-random number is generated and
+compared with this prior probability, and the sample is rejected if the
+pseudo-random number is greater of the two.
+Calculations for ${\bf J}(\xi_i)$ are done for approved $\xi_i$s only.
+This mechanism concentrates the approved samples in regions where
+the linear approximation ${\bf J}_L$ is likely to give a false indication
+of whether the objective function exceeds the critical value ${\bf J_C}$.
+
+In order to achieve an unbiased estimator,
+this concentration of samples must be compensated for by weighing each sample
+differently.  Let $f(\xi)$ be the probability density function of $\xi$,
+then the probability density function of the approved samples
+is $\dfrac{f(\xi) p_D(\xi)}{\int p_D(\xi) dP(\xi)}$;
+if we denote this probability distribution as $Q(\xi)$,
+then the Radon-Nikodym derivative is given by
+\begin{equation} \label{measure_q}
+\frac{dQ}{dP} = \dfrac{p_D(\xi)}{\int p_D(\xi) dP(\xi)} \;.
+\end{equation}
+
+With the approved samples $\xi_1, \xi_2, \ldots, \xi_N$ distributed according
+to the new probability distribution $Q$, a different estimator $P^{IS}_N$
+is used.
+\[ P({\bf J}(\xi) > {\bf J_C}) \approx P^{IS}_N
+ = P({\bf J}_L > {\bf J_C}) + \frac{1}{N}
+   \sum_{i=1}^N \frac{dP}{dQ}\,\left(
+   I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C})\right).
+\]
+This estimator $P^{IS}_N$ is unbiased for $P({\bf J} > {\bf J_C})$ because
+\[ \begin{split}
+   \mathrm{E}_Q\left[P^{IS}_N\right] &= P({\bf J}_L > {\bf J_C}) +
+   \mathrm{E}_Q\left[\frac{dP}{dQ}\,
+   \left( I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C})
+   \right)\right] \\
+&= P({\bf J}_L > {\bf J_C}) +
+   \mathrm{E}_P\left[
+   I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C}) \right] \\
+&= P({\bf J} > {\bf J_C}) \;.
+\end{split} \]
+The new estimator $P^{IS}_N$ with importance sampling can further reduce the
+variance of the Monte Carlo method and accelerate its convergence.
+The variance of this importance sampling estimator is
+\begin{equation} \begin{split} \label{var_is}
+   \mathrm{Var}_Q \left[ P^{IS}_N \right]
+=& \frac{1}{N}\;\mathrm{Var}_Q \left[ \frac{dP}{dQ}\, \left(
+   I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C})\right)
+   \right] \\
+=& \frac{1}{N}\;\mathrm{E}_Q \left[ \left(\frac{dP}{dQ}\right)^2\, \left(
+   I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C})\right)^2
+   \right] \\
+&- \frac{1}{N}\;(P({\bf J} > {\bf J_C}) - P({\bf J}_L > {\bf J_C}))^2 \\
+=& \frac{1}{N}\;\mathrm{E}_P \left[ \frac{dP}{dQ}\, 
+   I({\bf J} > {\bf J_C} > {\bf J}_L \mbox{ or }
+     {\bf J} < {\bf J_C} < {\bf J}_L) \right] \\
+&- \frac{1}{N}\;(P({\bf J} > {\bf J_C}) - P({\bf J}_L > {\bf J_C}))^2 \\
+=& \frac{1}{N}\;\mathrm{E}_P \left[ \frac{
+   I({\bf J} > {\bf J_C} > {\bf J}_L \mbox{ or }
+     {\bf J} < {\bf J_C} < {\bf J}_L)}
+   {p({\bf J} > {\bf J_C} > {\bf J}_L \mbox{ or }
+     {\bf J} < {\bf J_C} < {\bf J}_L)} \right] \; \int p_D(\xi) dP(\xi) \\
+&- \frac{1}{N}\;(P({\bf J} > {\bf J_C}) - P({\bf J}_L > {\bf J_C}))^2 \;.
+\end{split} \end{equation}
+In the next section, we will demonstrate that
+the importance sampling technique indeed reduces the variance.
+
+
+\section{Application to an unsteady fluid flow problem}
+\label{s:acc_monte_example}
+
+We consider the laminar flow around a circular cylinder at a Reynolds number of
+100.  We use the same mesh, problem setup and numerical methods as described in
+Section \ref{s:cylinder_adj}.
+The objective function is the time-averaged drag coefficient of
+the cylinder, and we want to calculate the probability that it
+is greater than a critical value ${\bf J_C} = 1.345$.
+
+The uncertainties in the problem come from small,
+unknown rotational oscillations
+of the cylinder in the flow.  We assume that this random rotation consists of
+10 different frequencies, including the vortex-shedding frequency and its
+subharmonics.  The rotation at each frequency is described by two random
+numbers, making each frequency component of the oscillation random both in
+magnitude and random in phase.  Specifically, let $f_V$ be the
+frequency of the vortex-shedding, the angular speed of the cylinder rotating
+about its symmetric axis is
+\begin{equation}\label{oscillations}
+w(t) = \sum_{i=1}^{10} \xi_{2i-1} \cos (2\pi i f_V t)
+                        + \xi_{2i} \sin (2\pi i f_V t) \;,
+\end{equation}
+where $\xi_1,\ldots, \xi_{20}$ are Gaussian random variables with mean 0 and
+standard deviation 0.01.
+
+Although the magnitude of the random rotational oscillations are small, they
+have significant impact on the flowfield.  As a result, the forces exerted
+on the cylinder by the fluid can be significantly affected.  Figure
+\ref{monte} plots the time history of the drag coefficient $c_d$ and
+lift coefficient $c_l$ of the cylinder for 1000 samples of the random
+oscillations.  These non-dimensionalized quantities $c_d$ and $c_l$ are
+defined as
+\[ c_d = \frac{D}{\frac12 \rho v_{\infty}^2 D\, b} \qquad
+   c_l = \frac{L}{\frac12 \rho v_{\infty}^2 D\, b} \]
+where $D$ is the drag of the cylinder, i.e., the component of the aerodynamic
+force that is parallel to the freestream; $L$ is the lift of the cylinder, i.e
+the component of the aerodynamic force that is perpendicular to the
+freestream; $\rho$ is the density of the fluid; $v_{\infty}$ is the speed
+of the freestream flow; $D$ is the diameter of the cylinder, and $b$ is the
+spanwise length of the cylinder.
+
+\begin{figure}[ht!]\center
+\includegraphics[width=6in]{output_cdp003/monte.png}
+\caption{Realizations of the $c_l$ (the top figure) and $c_d$
+         (the bottom figure).  The white lines indicate $c_l$ and $c_d$ with
+         no rotations.}
+ \label{monte}
+\end{figure}
+In Figure \ref{monte}, the white lines represent the lift and drag coefficients
+with no random oscillations.  The black dotted lines show the lift and drag
+coefficients of cylinders undergoing rotational oscillations described by
+equation (\ref{oscillations}) with 1000
+samples of the random vector $(\xi_1,\ldots,\xi_{20})$.  As can be seen,
+the drag coefficient can be significantly changed by the random
+rotational oscillations.  Therefore, our objective function,
+the time-averaged drag coefficient $\bf J$, should also depend on
+the specific form of the rotational oscillation, which is specified by the
+random vector $(\xi_1,\ldots,\xi_{20})$.
+
+\begin{figure}[htb!]\center
+\includegraphics[width=6in]{output_cdp003/hist0.png}
+\caption{The histogram of the objective function ${\bf J} = \overline{c_d}$.
+         The dashed vertical line indicates ${\bf J}$ with no rotation.
+         The dotted vertical line indicates ${\bf J_C} = 1.345$.}
+ \label{hist0}
+\end{figure}
+Figure \ref{hist0} shows that the objective function is indeed modified by
+the random rotational oscillations.  This histogram shows the empirical
+density function for the time-averaged drag coefficient, our objective function
+$\bf J$.  The dotted vertical line represents the critical value
+${\bf J_C} = 1.345$.  As can be seen, there is a small but non-trivial
+probability that our
+objective function is higher than this critical value.  We can also roughly
+estimate this tail probability from the histogram.
+Since the objective function exceeds the critical value in 48 of
+the 1000 samples we calculated, an unbiased estimate of the tail probability
+is $P({\bf J} > {\bf J_C}) \approx 4.8\%$.
+However, the standard deviation of this estimate is
+$0.007$, making the $3\sigma$ confidence interval of the tail probability
+\begin{equation} \label{number_monte}
+P({\bf J} > {\bf J_C}) = 4.8 \pm 2.0 \% .
+\end{equation}
+These numbers reveal the inefficiency of the brute force Monte Carlo method.
+Despite of calculating the objective function for 1000 samples, the fraction
+of the samples whose objective function is higher than the critical value is
+small.  As a result, the probability calculated by this method has a large
+variance and therefore is not accurate.
+
+\subsection{Adjoint linear approximation}
+
+The adjoint equation for this problem is solved with the method described in
+Chapters 3 and 4.  From the adjoint solution, we can calculate the
+gradient of the objective function with respect to the rate of rotation of the
+cylinder.
+\[ {\hat \omega}(t) = \frac{\partial {\bf J}}{\partial \omega(t)} \]
+Figure \ref{mean} (previous chapter) shows the time history
+of $\hat \omega$.  With $\hat \omega$ calculated, we can obtain the
+sensitivity gradient of the objective function with respect to
+$\xi_1, \ldots, \xi_{20}$, the random variables describing the rotational
+oscillation.
+\[\begin{split}
+   \frac{\partial {\bf J}}{\partial \xi_i}
+&= \int_{T_0}^{T_1} \frac{\partial {\bf J}}{\partial \omega(t)}
+        \frac{\partial \omega(t)}{\partial \xi_i} \,dt \\
+&= \begin{cases}
+   \displaystyle \int_{T_0}^{T_1} {\hat\omega}
+                 \cos \left(2\pi \frac{i+1}{2} f_V t\right) dt,
+   & i \mbox{ is odd} \\
+   \displaystyle \int_{T_0}^{T_1} {\hat\omega}
+                 \sin \left(2\pi \frac{i}{2} f_V t\right) dt,
+   & i \mbox{ is even}
+   \end{cases}
+\end{split}\]
+Calculating this sensitivity derivatives for each $i=1,\ldots,20$ generates
+the sensitivity gradient vector of $\bf J$ as a function of the random
+variables $\xi = (\xi_1,\ldots,\xi_{20})$.
+\[ \nabla {\bf J} = \left(\frac{\partial {\bf J}}{\partial \xi_1}, \ldots,
+                          \frac{\partial {\bf J}}{\partial \xi_{20}}\right) \]
+
+With this sensitivity gradient, we can construct a linear approximation
+of the objective function
+\begin{equation} \label{adj_linear_approx}
+{\bf J}(\xi) \approx {\bf J}_L(\xi) = {\bf J}_0 + \nabla {\bf J} \cdot \xi
+\end{equation}
+where ${\bf J}_0 = {\bf J}(0)$ is the value of the objective function
+when $\xi = 0$, i.e., when the cylinder is not rotating.
+This adjoint linear approximation can be obtained with one Navier-Stokes
+solution, from which ${\bf J}_0$ is calculated, and one adjoint solution,
+from which the sensitivity gradient $\nabla {\bf J}$ is calculated.
+Once we have ${\bf J}_0$ and $\nabla {\bf J}$, the adjoint linear approximation
+${\bf J}_L(\xi)$ can be calculated using (\ref{adj_linear_approx}) at
+essentially no additional computational cost.
+
+\begin{figure}[htb!] \center
+\includegraphics[width=6in]{output_cdp003/corr.png}
+\caption{The correlation between adjoint approximation (horizontal axis)
+         and true objective function (vertical axis).
+         The horizontal and vertical dotted lines indicates the critical
+         value ${\bf J_C}$.
+         The circular symbol at the center indicates the objective function
+         without rotation.  }
+\label{corr} 
+\end{figure}
+Figure \ref{corr} shows
+the true value of the objective function ${\bf J}(\xi_i)$ against its
+adjoint linear approximation ${\bf J}_L(\xi_i)$ for 1000 randomly sampled
+$\xi_1, \ldots, \xi_{1000}$.  Each cross on the plot represents one sample.
+As can be seen, although some
+samples deviate from the diagonal line, indicating large approximation errors,
+the adjoint linear approximation is a sufficiently accurate approximation to
+the objective function.  
+
+The adjoint linear
+approximation can be directly used to obtain a very efficient first-order
+estimate of $P({\bf J} > {\bf J_C})$, the probability we want to calculate.
+Because ${\bf J}_L(\xi)$ can be evaluated
+with essential no computational cost, a very large number of Monte Carlo
+samples can be used to accurately calculate
+$P({\bf J}_L > {\bf J_C})$.
+This probability that the linear approximation exceeds the critical value can
+be used to approximate the probability that the objective function exceeds the
+critical value.
+$P({\bf J} > {\bf J_C}) \approx P({\bf J}_L > {\bf J_C})$.
+
+\begin{figure}[htb!] \center
+\includegraphics[width=6in]{output_cdp003/adjoint.png}
+\caption{The empirical density function of the objective function obtained
+         using the brute-force Monte Carlo (vertical bars), and the empirical
+         density function of the adjoint approximation obtained using
+         adjoint method (solid line).
+         The dashed vertical line indicates ${\bf J}$ with no rotation.
+         The dotted vertical line indicates ${\bf J_C} = 1.345$.}
+ \label{hist}
+\end{figure}
+Figure \ref{hist} shows the application of this approach to our cylinder
+problem.
+The solid line is the empirical distribution function obtained from 10,000,000
+samples of the adjoint linear approximation ${\bf J}_L$.
+For comparison, the bars are the same empirical distribution function obtained
+from the 1000 samples of $\bf J$.  The vertical dotted line indicates the
+critical value ${\bf J_C}$.  As can be seen, the distribution
+function of the adjoint linear approximation is close to the distribution of
+the true objective function.  In addition, because the distribution
+of the adjoint approximation is obtained with many more samples, it is much
+smoother than the empirical distribution of the true objective function.
+At the same time, the tail probability for the adjoint approximation
+$P({\bf J}_L > {\bf J_C})$ can be obtained with little variance.
+In this case, we calculated
+\begin{equation} \label{result_adjoint_approx}
+P({\bf J} > {\bf J_C}) \approx P({\bf J}_L > {\bf J_C}) = 3.6 \%.
+\end{equation}
+
+We compare this result with the value calculated using the brute force
+Monte Carlo method (\ref{number_monte}).
+The accuracy of their results are similar, because the true value of
+$P({\bf J} > {\bf J_C})$ is $4.1 \pm 0.5 \%$ (as calculated in Equation
+(\ref{result_importance_samp}) later in this chapter).
+Nevertheless, the error of this adjoint
+approximation method is different in nature from the error of the brute force
+Monte Carlo method.  The error of the brute force Monte Carlo method comes from
+its
+large variance of the estimator, while the result of the adjoint approximation
+method has very little variance due to the large number of samples used.
+Instead, the error of the adjoint approximation method is a consequence of
+approximating $P({\bf J} > {\bf J_C})$ with $P({\bf J}_L > {\bf J_C})$.
+The difference between these two probabilities can be illustrated using
+Figure $\ref{corr}$.  In the plot, the vertical axis is $\bf J$, and the
+horizontal axis is ${\bf J}_L$.  The probability $P({\bf J} > {\bf J_C})$
+we want to calculate is the proportion of samples above the
+horizontal dotted line.  In contrast, $P({\bf J}_L > {\bf J_C})$, the
+probability we use to approximate $P({\bf J} > {\bf J_C})$, is the proportion
+of samples to the right of the vertical line.  By using this
+approximation, we underestimate the samples to the upper-left of the
+intersection of the two dotted lines, and overestimate the samples to
+the lower-right of the intersection.
+
+Although the adjoint approximation method has a similar large error to the
+brute force Monte Carlo method in our example, it is by far less expensive.
+The brute force Monte Carlo method requires 1000 Navier-Stokes calculations,
+while the adjoint approximation method involves only one Navier-Stokes
+calculation and one adjoint calculation.
+Since the adjoint calculation requires about 4 times
+the computational resources of a Navier-Stokes calculation, the brute force
+Monte Carlo method is 200 times more expensive than the adjoint approximation
+method.  This extreme efficiency makes the adjoint method the first choice for
+a rough estimate of the tail probability.
+
+
+\subsection{Accelerated Monte Carlo}
+
+Although the adjoint approximation method of estimating
+$P({\bf J} > {\bf J_C})$ is computationally economical, it does not produce
+very accurate results.  In this section, we use the methods described in
+the previous section to reduce the variance of the Monte Carlo method.
+With these
+variance-reduction techniques, we produce more accurate results with the
+same cost as the brute force Monte Carlo method.
+
+We first apply the control variates technique to this problem, as described
+in Section \ref{s:control_variate}.  With this
+technique, we use the same samples as in the brute force Monte Carlo method, but
+change the estimator to
+\[ P^{CV}_N 
+ = P({\bf J}_L > {\bf J_C}) + \frac{1}{N}
+   \sum_{i=1}^N \left(
+   I({\bf J}(\xi_i) > {\bf J_C}) - I({\bf J}_L(\xi_i) > {\bf J_C})\right) .\]
+We note that the first term in the estimator is simply the result we obtain
+from the adjoint approximation method, and the second term is simply an
+unbiased estimator of the difference between the true tail probability
+$P({\bf J} > {\bf J_C})$ and the estimated tail probability by adjoint
+approximation $P({\bf J}_L > {\bf J_C})$.  In Figure \ref{corr}, this
+estimator is counting the proportion of samples to the upper-left
+of the intersection, minus the proportion of samples to the lower-right of
+the intersection.  With this estimator and the same 1000 samples as the brute
+force Monte Carlo method, we calculate
+\begin{equation} \label{result_control_var}
+P({\bf J} > {\bf J_C}) = 4.1 \pm 1.2 \% ,
+\end{equation}
+where the $3\sigma$ confidence interval is obtained from the variance formula
+(\ref{var_cv}).  Comparing to (\ref{number_monte}), the variance of the Monte
+Carlo method is significantly reduced.  To achieve the same variance-reduction
+using the brute force Monte Carlo method, $1778$ more Navier-Stokes equations
+must be solved.
+In contrast, we achieved the same reduction in variance with merely
+one additional Navier-Stokes solution and one adjoint solution.
+This implies that one single adjoint solution, whose cost is 4 times that of
+a Navier-Stokes solution, achieves the same effect as 1,777 Navier-Stokes
+equations in this example.
+
+\begin{figure}[htb!] \center
+\includegraphics[width=6in]{output_cdp004/corr_is.png}
+\caption{Monte Carlo samples with importance sampling.
+         The horizontal axis is the adjoint approximation;
+         the vertical axis is true objective function.
+         The circular symbol at the center indicates the objective function
+         without rotation. }
+\label{is} 
+\end{figure}
+The variance can be further reduced using the importance sampling technique
+as discussed in Section \ref{s:importance_sampling}.
+We use 25 samples to calculate
+the variance of the normalized approximation error
+$\dfrac{{\bf J} - {\bf J}_L}{||\xi - \xi_0||^2}$, and approximate it with
+a Gaussian distribution with zero mean and same variance.
+This Gaussian distribution is used to calculate $p({\bf J}(\xi) > {\bf J_C})$
+for each $\xi$, the probability that a proposed sample is approved.
+The resulting samples distribute according to probability $Q$
+(\ref{measure_q}), and concentrate in areas where the adjoint approximation
+$P({\bf J}_L > {\bf J_C}) \approx P({\bf J} > {\bf J_C})$
+is likely to be erroneous.  This includes
+the regions where $\bf J$ is close to ${\bf J_C}$, and areas where
+$\bf J$ may be significantly different from its adjoint approximation
+${\bf J}_L$.
+
+Figure \ref{is} shows the concentration of the approved samples used in
+importance sampling.
+We plot the true value of the objective function ${\bf J}(\xi_i)$ against its
+adjoint linear approximation ${\bf J}_L(\xi_i)$ for
+$\xi_1, \ldots, \xi_{1000}$ sampled from probability distribution $Q$.
+Each cross on the plot represents one sample.
+The diagonal dotted line indicates where the horizontal axis is equal to the
+vertical axis; the horizontal and vertical dotted lines indicate the critical
+value ${\bf J_C}$.  As can be seen, most of the samples concentrate near this
+critical value.  Compared to Figure \ref{corr}, there are many more samples
+to the upper-left and to the lower-right of the intersection.  These additional
+samples allows a much-reduced variance in estimating the errors made by the
+adjoint approximation $P({\bf J}_L > {\bf J_C})$, and returns a significantly
+more accurate results.  With this method, we calculated
+\begin{equation} \label{result_importance_samp}
+ P({\bf J} > {\bf J_C}) = 4.1 \pm 0.5 \%,
+\end{equation}
+where the $3\sigma$ confidence interval is based on the variance formula
+(\ref{var_is}).  Comparing to the result obtained by the brute force Monte Carlo
+method (\ref{number_monte}), the variance of the Monte
+Carlo method is significantly reduced by $75\%$.
+To achieve the same variance-reduction using the brute force Monte
+Carlo method, 15,000 more Navier-Stokes equations would have to be solved.
+In contrast, we achieved the same reduction in variance with
+26 additional Navier-Stokes solutions and one adjoint solution.
+This implies that one single adjoint solution, whose cost is 4 times that of
+a Navier-Stokes solution, achieves the same effect as $14974$ Navier-Stokes
+equations in this example.
+
+\begin{figure}[htb!]\center
+\includegraphics[width=6in]{output_cdp004/mc_compare.png}
+\caption{Convergence history of three different Monte Carlo methods:
+         Red is brute-force Monte Carlo method;
+         blue is Monte Carlo with control variate;
+         black is Monte Carlo method with control variates
+         and importance sampling.
+         The horizontal axis indicates the number of samples;
+         the solid lines are the $P({\bf J} > {\bf J_C})$ calculated by
+         the estimators of each method; the dotted lines are the $3\sigma$
+         confidence interval bounds of the estimators.}
+ \label{compare}
+\end{figure}
+Figure \ref{compare} compares the convergence of three different Monte Carlo
+methods.  Different colors represent different methods: red is brute-force
+Monte Carlo, blue is with redesigned estimator but without importance
+sampling, and black is with importance sampling.
+It can be seen that using the better estimator with importance sampling reduces
+the standard deviation by a factor of 4, which implies that the number of
+samples required is reduced by a factor of 16.
+
+
+\section{Conclusion}
+Table \ref{tab_comp} compares
+the computational cost, accuracy and efficiency of the four methods discussed
+in this chapter.
+\begin{table}[htb!] \center
+\caption{Comparison of the methods for estimating $P({\bf J} > {\bf J_C})$.}
+\begin{tabular}{llll}
+\\
+\hline
+& Computational time & $3\sigma$ & Equivalent samples \\
+\hline
+Brute force Monte Carlo & 240 hours & 2.0\% & 1,000  \\
+Adjoint approximation   & 1 hour    & ---   & ---    \\
+Control variate         & 241 hours & 1.2\% & 2,778  \\
+Importance sampling     & 247 hours & 0.5\% & 16,000 \\
+\hline
+\end{tabular}
+\label{tab_comp}
+\end{table}
+As can be seen, using the adjoint equation can significantly
+increase the accuracy and reduce the computational time in quantification of
+margins and risk.  The adjoint approximation method is by far less expensive
+than any Monte Carlo method, and is often sufficiently accurate for a first
+estimate.  However, it is difficult to evaluate the accuracy of its result.
+Both the control variate method and the importance sampling method are
+accelerated Monte Carlo with adjoint solution.
+They are marginally more expensive than the brute force Monte Carlo method,
+but the accuracy is significantly improved.
+
+
+%\section{Conclusion}
+%We proposed two techniques of calculating the tail probability
+%$P({\bf J} > {\bf J_C})$, the probability an objective function exceeds
+%a critical value.  
+%The adjoint method is very cost effective, has no variance, but has
+%some systematic bias.  The accelerated Monte Carlo method uses the information
+%from the adjoint solution to construct better statistical estimator and
+%importance sampling strategies, which significantly reduces variance and
+%the required number of samples for an answer of desired accuracy.
+%
