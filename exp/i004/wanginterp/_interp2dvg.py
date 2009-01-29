@@ -51,8 +51,7 @@ class Interp2DVG(Interp2D):
   """
 
   def __init__(self, xv, fxv, dfxv=None, xg=None, fpxg=None, dfpxg=None, \
-               beta=None, gamma=None, N=None, l=1, verbose=1, \
-               safety_factor=1.0):
+               N=None, l=1, verbose=1, safety_factor=1.0):
     """
     __init__(self, xv, fxv, dfxv=None, xg=None,
              fpxg=None, dfpxg=None, N=None, l=1)

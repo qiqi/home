@@ -113,6 +113,10 @@ class Interp1DVG(Interp1D):
 
 
   def interp_matrices(self, x, beta=None, gamma=None):
+    """
+    See Interp1D.interp_matrices.
+    This is the variable gamma version.
+    """
     if beta is None:
       beta = self.beta
     if gamma is None:
@@ -121,3 +125,13 @@ class Interp1DVG(Interp1D):
 
 
 
+  def grad_coef(self, x, beta=None, gamma=None):
+    """
+    See Interp1D.grad_coef.
+    This is the variable gamma version.
+    """
+    if beta is None:
+      beta = self.beta
+    if gamma is None:
+      gamma = self.gamma_interp.interp(x)
+    return Interp1D.grad_coef(self, x, beta, gamma)

@@ -1,14 +1,4 @@
-"""
-Interpolation and regression in one-dimensional space
-
-reference:
-  Q Wang et al. A Rational interpolation Scheme with
-    Super-Polynomial Rate of Convergence.
-    Submitted to SIAM Journal of Numerical Analysis.
-
-Qiqi Wang  January 2009
-"""
-
+# Interpolation in one dimensional space
 
 import copy
 import sys
@@ -91,10 +81,10 @@ def _lsqr_wang(X, E, c):
   E = E[finite]
   # QR decomposition of X, R is now cholesky factor of X^T X + E^T E
   N, n = X.shape
-  A = zeros([N+n, n])
-  A[:N,:] = X
-  A[range(N,N+n), range(n)] = E
-  R = numpy.linalg.qr(A, mode='r')
+  XE = zeros([N+n, n])
+  XE[:N,:] = X
+  XE[range(N,N+n), range(n)] = E
+  R = numpy.linalg.qr(XE, mode='r')
   # solve...
   a = zeros(c.size, dtype=X.dtype)
   tmp = _solve_L(R.transpose(), c[finite])
@@ -120,12 +110,14 @@ def _lsqr_golub(X, E, b, C, d):
   assert b.ndim == 1 and b.shape[0] == X.shape[0] + E.shape[0]
   assert C.ndim == 2 and C.shape[1] == E.size and C.shape[0] < C.shape[1]
   l = C.shape[0]
+  N, n = X.shape
   # filter out infinite columns and rows
   D = (X**2).sum(0) + E**2
   finite = numpy.isfinite(D)
   X = X[:,finite]
   E = E[finite]
   C = C[:,finite]
+  b = numpy.concatenate((b[:N], b[N:][finite]))
   # prepare householder
   v = zeros(C.shape)
   E = diag(E)
@@ -146,16 +138,15 @@ def _lsqr_golub(X, E, b, C, d):
     for i in range(hgv.size):
       E[i,ic:] -= 2 * hgv[i] * v[ic,ic:]
   # QR decomposition
-  N, n = X.shape
-  A = zeros([N+n, n])
-  A[:N,:] = X[:,:]
-  A[N:, :] = E[:,:]
-  Q, R = numpy.linalg.qr(A[:,l:], mode='full')
+  XE = zeros([N+n, n])
+  XE[:N,:] = X[:,:]
+  XE[N:, :] = E[:,:]
+  Q, R = numpy.linalg.qr(XE[:,l:], mode='full')
   # solve for constraints
   at = zeros(n)
   at[:l] = linalg.solve(C[:,:l], d)
   # solve for least squares
-  rhs2 = dot(Q.transpose(), b - dot(A[:,:l], at[:l]))
+  rhs2 = dot(Q.transpose(), b - dot(XE[:,:l], at[:l]))
   at[l:] = _solve_R(R, rhs2)
   # invert the householder
   for ic in range(l-1, -1, -1):
@@ -410,10 +401,17 @@ class Interp1D(object):
     X = X[:,isort]
     E = E[isort]
     C = C[:,isort]
-    # solve least square
+    # prepare b
     b = zeros(self.N + self.n)
+    if beta is None:
+      b[0] = self.beta * self.gamma
+    else:
+      b[0] = beta * gamma
+    # prepare d
     d = zeros(self.l)
-    b[0] = 1.0
+    if self.l > 1:
+      d[1] = 1.0
+    # solve least square
     a = _lsqr_golub(X, E, b, C, d)
     # reverse sorting permutation to get a and b
     arevt = a[irevt]
@@ -421,8 +419,7 @@ class Interp1D(object):
     ag = arevt[self.nv:]
     # compute the expeted squared residual
     finite = (a != 0)
-    Xa = dot(X[:,finite], a[finite])
-    Xa[0] -= 1.0
+    Xa = dot(X[:,finite], a[finite]) - b[:self.nv]
     Ea = (E*a)[finite]
     er2 = (Xa**2).sum() + (Ea**2).sum()
     return av, ag, er2
@@ -433,12 +430,15 @@ class Interp1D(object):
     """
     Estimate the `magnitude' parameter beta from data points.
     """
-    assert self.fxv.ndim == 1 and self.fxv.shape == self.dfxv.shape
-    f_bar = self.fxv.mean()
-    ratio = (self.dfxv**2).sum() / ((self.fxv - f_bar)**2).sum() * \
-            float(self.nv-1) / float(self.nv)
-    beta = sqrt(((self.fxv - f_bar)**2).sum() / (self.nv-1) * exp(-ratio))
-    return beta
+    if self.dfxv.max() == 0:  # beta does not matter in this case.
+      return 1.0
+    else:
+      assert self.fxv.ndim == 1 and self.fxv.shape == self.dfxv.shape
+      f_bar = self.fxv.mean()
+      ratio = (self.dfxv**2).sum() / ((self.fxv - f_bar)**2).sum() * \
+              float(self.nv-1) / float(self.nv)
+      beta = sqrt(((self.fxv - f_bar)**2).sum() / (self.nv-1) * exp(-ratio))
+      return beta
 
 
 

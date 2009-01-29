@@ -11,14 +11,14 @@ from wang import Interp1D, Interp1DVG
 
 # ========================= Tune this =========================
 
-CASE = 'cos'
-def func(x):
-  f = numpy.cos(x)
-  return f
-def grad(x):
-  fp = -numpy.sin(x)
-  return fp
-
+# CASE = 'cos'
+# def func(x):
+#   f = numpy.cos(x)
+#   return f
+# def grad(x):
+#   fp = -numpy.sin(x)
+#   return fp
+# 
 # CASE = 'runge'
 # def func(x):
 #   f = 1.0 / (1.0 + x**2)
@@ -30,15 +30,15 @@ def grad(x):
 #   f -= 2*exp(-(x*4)**2)
 #   return f
 # 
-# CASE = 'step'
-# def func(x):
-#   f = numpy.cos(x)
-#   f[x<0] *= -1
-#   return f
-# def grad(x):
-#   fp = -numpy.sin(x)
-#   fp[x<0] *= -1
-#   return fp
+CASE = 'step'
+def func(x):
+  f = numpy.cos(x)
+  f[x<0] *= -1
+  return f
+def grad(x):
+  fp = -numpy.sin(x)
+  fp[x<0] *= -1
+  return fp
 
 n = 26  # number of data points
 

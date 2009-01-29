@@ -16,7 +16,7 @@ fy = y
 x = linspace(-5, 5, n)
 fx = x
 
-interp = Interp1DVG(x, fx, l=1, verbose=1)
+interp = Interp1D(x, fx, l=1, verbose=1)
 fp, sig = interp.grad(y, compute_dfp=True)
 print fp.max(), fp.min()
 

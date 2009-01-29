@@ -1,3 +1,31 @@
+# Copyright 2009 Qiqi Wang
+#
+# This file is part of wanginterp.
+#
+# wanginterp is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+Interpolation and regression in one-dimensional space
+  with variable gamma.
+
+reference:
+  Q Wang et al. A Rational Interpolation Scheme with
+    Super-Polynomial Rate of Convergence.
+    In CTR Annual Research Briefs 2008, Stanford, CA.
+    Submitted to SIAM Journal of Numerical Analysis.
+"""
+
 import copy
 import sys
 import pickle
@@ -6,7 +34,7 @@ import time
 import numpy
 import pylab
 from numpy import zeros, ones, eye, kron, linalg, dot, exp, sqrt, diag, pi, \
-                  asarray, sign
+                  asarray, sign, log
 
 from _interp1d import Interp1D
 
@@ -24,7 +52,7 @@ class Interp1DVG(Interp1D):
   """
 
   def __init__(self, xv, fxv, dfxv=None, xg=None, fpxg=None, dfpxg=None, \
-               N=None, l=1, verbose=1):
+               N=None, l=1, verbose=1, safety_factor=1.0):
     """
     __init__(self, xv, fxv, dfxv=None, xg=None,
              fpxg=None, dfpxg=None, N=None, l=1)
@@ -44,29 +72,12 @@ class Interp1DVG(Interp1D):
     """
 
     Interp1D.__init__(self, xv, fxv, dfxv, xg, fpxg, dfpxg, 1, 1, \
-                      N, l, verbose)
+                      N, l, verbose, safety_factor)
     # calculate gammas and construct interpolation object for gamma
     self.beta = self.calc_beta()
     self.gamma = self.calc_gamma()
-    self.gamma_interp = Interp1D(xv, self.gamma, verbose=0)
-
-
-
-  def _calc_res_ratio(self, iv, beta, gamma):
-    """
-    A utility function used by calc_gamma, calculates
-      the ratio of real residual to the estimated
-      residual at the iv'th value data point, which
-      is used to make decision in the bisection process
-      for gamma at the iv'th data point.
-    """
-    base = range(iv) + range(iv+1,self.nv)
-    subinterp = Interp1D(self.xv[base], self.fxv[base], self.dfxv[base], \
-                         self.xg, self.fpxg, self.dfpxg, beta, gamma, \
-                         self.N, self.l, self.verbose)
-    av, ag, er2 = subinterp.interp_coef(self.xv[iv])
-    resid = dot(av,self.fxv[base]) + dot(ag,self.fpxg) - self.fxv[iv]
-    return resid**2 / (er2 + self.dfxv[iv]**2) * 1.0E+1
+    self.log_gamma_interp = Interp1D(xv, log(self.gamma), verbose=0, \
+                                     safety_factor=100)
 
 
 
@@ -76,20 +87,9 @@ class Interp1DVG(Interp1D):
       each point from the data points.
     """
     assert isinstance(self.beta, float)
-    # upper and lower bounds
-    sorted_xv = numpy.array(sorted(self.xv))
-    sorted_xg = numpy.array(sorted(self.xg))
-    if self.xg.size == 0:
-      delta_max = self.xv.max() - self.xv.min()
-      delta_min = (sorted_xv[1:] - sorted_xv[:-1]).min()
-    else:
-      delta_max = max(self.xv.max(), self.xg.max()) - \
-                  min(self.xv.min(), self.xg.min())
-      delta_min = min((sorted_xv[1:] - sorted_xv[:-1]).min(), \
-                      (sorted_xg[1:] - sorted_xg[:-1]).min())
-    assert delta_max > delta_min
-    gamma_min_all = 1. / delta_max
-    gamma_max_all = pi / delta_min
+    if self.verbose > 1:
+      print '    calculating gamma...'
+    gamma_min_all, gamma_max_all = self._calc_gamma_bounds()
     # logorithmic bisection for gamma
     gamma = zeros(self.nv)
     for iv in range(self.nv):
@@ -120,7 +120,7 @@ class Interp1DVG(Interp1D):
     if beta is None:
       beta = self.beta
     if gamma is None:
-      gamma = self.gamma_interp.interp(x)
+      gamma = exp(self.log_gamma_interp.interp(x))
     return Interp1D.interp_matrices(self, x, beta, gamma)
 
 
@@ -133,5 +133,5 @@ class Interp1DVG(Interp1D):
     if beta is None:
       beta = self.beta
     if gamma is None:
-      gamma = self.gamma_interp.interp(x)
+      gamma = exp(self.log_gamma_interp.interp(x))
     return Interp1D.grad_coef(self, x, beta, gamma)
